@@ -1,0 +1,43 @@
+[project]
+name = "tasometro-ingestion"
+version = "0.1.0"
+description = "Source-aggregated ingestion of Colombian lending rates (SFC, datos.gov.co) into a Parquet bronze layer."
+readme = "README.md"
+license = "MIT"
+authors = [
+    { name = "David Esteban Restrepo Velasquez", email = "davidrestrepoev@gmail.com" }
+]
+requires-python = ">=3.12"
+dependencies = [
+    "httpx>=0.28.1",
+    "polars>=2.1.0",
+    "tenacity>=9.2.1",
+]
+
+[project.scripts]
+tasometro-ingestion = "tasometro_ingestion.cli:main"
+
+[build-system]
+requires = ["uv_build>=0.13.6,<0.14.0"]
+build-backend = "uv_build"
+
+[dependency-groups]
+dev = [
+    "pytest>=9.2.0",
+    "respx>=0.23.1",
+    "ruff>=0.17.3",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP", "SIM", "RUF", "PT"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra --strict-markers -m 'not live'"
+markers = [
+    "live: hits the real datos.gov.co API (deselected by default; run with -m live)",
+]

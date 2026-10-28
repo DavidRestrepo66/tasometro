@@ -1,0 +1,13 @@
+# Secrets and local environment
+.env
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.ruff_cache/
+
+# Local data and artifacts
+data/
+dbt/target/
+dbt/logs/
+dbt/dbt_packages/
