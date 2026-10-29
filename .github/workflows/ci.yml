@@ -1,0 +1,69 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  python:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: warehouse
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U postgres" --health-interval 5s
+          --health-timeout 5s --health-retries 20
+    env:
+      TASOMETRO_TEST_DSN: postgresql://postgres:postgres@localhost:5432/warehouse
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v10
+      - name: Lint and format
+        working-directory: ingestion
+        run: |
+          uv run ruff check . ../metabase
+          uv run ruff format --check . ../metabase
+      - name: Ingestion tests
+        working-directory: ingestion
+        run: uv run pytest -q
+      - name: Metabase provisioning tests
+        working-directory: ingestion
+        run: uv run pytest ../metabase/tests -q --rootdir ../metabase
+
+  dbt:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: warehouse
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U postgres" --health-interval 5s
+          --health-timeout 5s --health-retries 20
+    env:
+      PGHOST: localhost
+      PGUSER: postgres
+      PGPASSWORD: postgres
+      PGDATABASE: warehouse
+      WAREHOUSE_HOST: localhost
+      WAREHOUSE_USER: postgres
+      WAREHOUSE_PASSWORD: postgres
+      WAREHOUSE_DB: warehouse
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v10
+      - name: Load the two-cut fixture into raw
+        run: dbt/ci/load_fixture.sh
+      - name: dbt build
+        working-directory: dbt
+        run: uv run dbt build --profiles-dir .
