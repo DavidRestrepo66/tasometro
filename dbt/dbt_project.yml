@@ -24,6 +24,9 @@ models:
     gold:
       +schema: gold
       +materialized: table
+    audit:
+      +schema: audit
+      +materialized: table
 
 seeds:
   tasometro:

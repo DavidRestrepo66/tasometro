@@ -1,0 +1,15 @@
+version: 2
+
+models:
+  - name: audit_revisiones_corte
+    description: >
+      One row per re-extraction of a (cut, entity, kind), compared with the
+      extraction before it. hubo_revision is true when the source published
+      different content for a cut already loaded.
+    columns:
+      - name: fecha_corte
+        data_tests: [not_null]
+      - name: run_id
+        data_tests: [not_null]
+      - name: hubo_revision
+        data_tests: [not_null]
