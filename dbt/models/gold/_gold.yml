@@ -1,0 +1,101 @@
+version: 2
+
+models:
+  - name: dim_entidad
+    description: Entities that reported rates; key (tipo_entidad, codigo_entidad).
+    columns:
+      - name: entidad_key
+        data_tests: [unique, not_null]
+      - name: nombre_entidad
+        data_tests: [not_null]
+      - name: nit
+        description: Null only if the entity is missing from the catalog, which a silver test already fails.
+
+  - name: dim_fecha
+    description: One row per weekly cut, with the week's average TPM.
+    columns:
+      - name: fecha_corte
+        data_tests: [unique, not_null]
+      - name: tpm_semana
+        data_tests: [not_null]
+      - name: dias_con_tpm
+        description: Days of the week covered by the TPM series; must be 7.
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: [7]
+                quote: false
+
+  - name: dim_producto
+    columns:
+      - name: producto_key
+        data_tests: [unique, not_null]
+      - name: clase_tasa
+        description: Null when tipo_de_tasa is missing from the tipo_tasa_clases seed.
+        data_tests: [not_null]
+      - name: plazo_banda
+        data_tests: [not_null]
+
+  - name: dim_segmento
+    columns:
+      - name: segmento_key
+        data_tests: [unique, not_null]
+      - name: tipo_de_persona
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: ["Natural", "Jurídica"]
+
+  - name: fact_tasas
+    description: Lending rates at the silver grain, keyed to the four dimensions.
+    columns:
+      - name: tasa_id
+        data_tests: [unique, not_null]
+      - name: fecha_corte
+        data_tests:
+          - relationships:
+              arguments: {to: ref('dim_fecha'), field: fecha_corte}
+      - name: entidad_key
+        data_tests:
+          - relationships:
+              arguments: {to: ref('dim_entidad'), field: entidad_key}
+      - name: producto_key
+        data_tests:
+          - relationships:
+              arguments: {to: ref('dim_producto'), field: producto_key}
+      - name: segmento_key
+        data_tests:
+          - relationships:
+              arguments: {to: ref('dim_segmento'), field: segmento_key}
+
+  - name: mart_tasas_semanales
+    description: >
+      Weekly weighted rate per bank, credit type, product and term band, with
+      spread against the week's TPM, weekly change and market deviation.
+    data_tests:
+      - combinacion_unica:
+          arguments:
+            columns: [fecha_corte, entidad_key, tipo_credito, producto_credito, plazo_banda]
+    columns:
+      - name: spread
+        description: tasa_ponderada - tpm_semana, in percentage points.
+        data_tests: [not_null]
+      - name: desvio_mercado
+        description: >
+          tasa_ponderada - market amount-weighted rate for the same product,
+          term band and week. Secondary metric, not the spread.
+        data_tests: [not_null]
+      - name: tasa_ponderada
+        data_tests:
+          - valores_en_rango:
+              arguments: {min_value: 0, max_value: 100}
+
+  - name: mart_brecha_sexo
+    description: Rate gap by sex within the same bank, product, term band and week; natural persons only.
+    data_tests:
+      - combinacion_unica:
+          arguments:
+            columns: [fecha_corte, entidad_key, tipo_credito, producto_credito, plazo_banda]
+    columns:
+      - name: brecha_femenino_menos_masculino
+        data_tests: [not_null]

@@ -29,7 +29,13 @@ models:
       - name: plazo_banda
         data_tests: [not_null]
       - name: tipo_de_tasa
-        data_tests: [not_null]
+        description: A value missing from the tipo_tasa_clases seed fails.
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('tipo_tasa_clases')
+                field: tipo_de_tasa
       - name: sum_montos
         data_tests:
           - not_null
