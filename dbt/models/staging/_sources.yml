@@ -1,0 +1,14 @@
+version: 2
+
+sources:
+  - name: raw
+    description: Loaded by `tasometro-ingestion load` and `catalog`; every value is text.
+    tables:
+      - name: sfc_lotes
+        description: One row per loaded bronze batch (its manifest).
+      - name: sfc_tasas
+        description: Source-aggregated rates, one row per group of one batch.
+      - name: sfc_tasas_cero
+        description: Count of zero-rate rows per group of one batch.
+      - name: sfc_entidades
+        description: SFC supervised-entity catalog (sr9n-792w), key and NIT only.

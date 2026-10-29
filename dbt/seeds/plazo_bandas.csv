@@ -1,0 +1,31 @@
+plazo_raw,plazo_banda,plazo_banda_orden,es_aproximado
+Hasta 30 días,Hasta 1 año,1,false
+Consumos a un mes,Hasta 1 año,1,false
+Consumos entre 2 y 6 meses,Hasta 1 año,1,false
+Hasta 6 meses,Hasta 1 año,1,false
+Más de 6 meses y hasta 1 año,Hasta 1 año,1,false
+Consumos entre 7 y 12 meses,Hasta 1 año,1,false
+Más de 30 días y hasta 1 año,Hasta 1 año,1,false
+Entre 31 días y 1 año,Hasta 1 año,1,false
+Hasta 1 año,Hasta 1 año,1,false
+Consumos entre 13 y 18 meses,1 a 3 años,2,false
+Consumos entre 19 y 24 meses,1 a 3 años,2,false
+Consumos entre 25 y 36 meses,1 a 3 años,2,false
+Más de 1 año y hasta 2 años,1 a 3 años,2,false
+Más de 2 años y hasta 3 años,1 a 3 años,2,false
+Más de 1 año y hasta 3 años,1 a 3 años,2,false
+Consumos a más de 36 meses,3 a 5 años,3,true
+Más de 3 años y hasta 4 años,3 a 5 años,3,false
+Más de 3 años y hasta 5 años,3 a 5 años,3,false
+Vivienda hasta 5 años,3 a 5 años,3,true
+Más de 4 años y hasta 6 años,Más de 5 años,4,true
+Más de 5 años y hasta 7 años,Más de 5 años,4,false
+Más de 6 años,Más de 5 años,4,false
+A más de 7 años,Más de 5 años,4,false
+Más de 7 años y hasta 10 años,Más de 5 años,4,false
+Más de 7 años y hasta 15 años,Más de 5 años,4,false
+Más de 10 años,Más de 5 años,4,false
+Más de 15 años y hasta 20 años,Más de 5 años,4,false
+A más de 20 años,Más de 5 años,4,false
+Avances en efectivo,Sin plazo,5,false
+N/A,Sin plazo,5,false
