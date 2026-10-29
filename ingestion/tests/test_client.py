@@ -139,3 +139,30 @@ def test_caller_cannot_override_pagination_parameters() -> None:
 def test_dataset_id_must_be_a_socrata_four_by_four(dataset: str) -> None:
     with make_client() as client, pytest.raises(ValueError, match="dataset id"):
         client.fetch_all(dataset, QUERY)
+
+
+@respx.mock
+def test_fetch_first_requests_one_row_and_returns_it() -> None:
+    route = respx.get(URL).mock(return_value=httpx.Response(200, json=[{"a": "1"}]))
+
+    with make_client() as client:
+        row = client.fetch_first("abcd-1234", QUERY)
+
+    assert row == {"a": "1"}
+    params = route.calls.last.request.url.params
+    assert params["$limit"] == "1"
+    assert "$offset" not in params
+    assert params["$where"] == "a > 0"
+
+
+@respx.mock
+def test_fetch_first_returns_none_when_nothing_matches() -> None:
+    respx.get(URL).mock(return_value=httpx.Response(200, json=[]))
+
+    with make_client() as client:
+        assert client.fetch_first("abcd-1234", QUERY) is None
+
+
+def test_fetch_first_rejects_client_managed_parameters() -> None:
+    with make_client() as client, pytest.raises(ValueError, match="managed by the client"):
+        client.fetch_first("abcd-1234", {**QUERY, "$limit": "5"})

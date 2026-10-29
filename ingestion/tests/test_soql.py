@@ -5,6 +5,7 @@ import pytest
 from tasometro_ingestion.soql import (
     GROUP_COLUMNS,
     EntityKey,
+    cut_exists_query,
     entities_query,
     rates_query,
     soql_timestamp,
@@ -86,6 +87,13 @@ def test_entities_query_lists_entities_reporting_in_a_cut_without_aggregates() -
         "$select": "tipo_entidad,codigo_entidad",
         "$where": "fecha_corte = '2026-10-16T00:00:00.000'",
         "$group": "tipo_entidad,codigo_entidad",
+    }
+
+
+def test_cut_exists_query_probes_a_cut_with_a_bare_filter() -> None:
+    assert cut_exists_query(CUT) == {
+        "$select": "fecha_corte",
+        "$where": "fecha_corte = '2026-10-16T00:00:00.000'",
     }
 
 
