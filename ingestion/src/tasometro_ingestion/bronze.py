@@ -78,7 +78,7 @@ def write_batch(root: Path, batch: BronzeBatch) -> WrittenBatch:
         schema=dict.fromkeys(columns, pl.String),
         orient="row",
     )
-    rows_sha256 = _rows_hash(frame)
+    rows_sha256 = rows_hash(frame)
 
     directory = (
         root
@@ -118,7 +118,7 @@ def _check_columns(rows: Sequence[Mapping[str, Any]], columns: tuple[str, ...]) 
         raise ValueError(f"schema drift, unexpected columns: {unexpected}")
 
 
-def _rows_hash(frame: pl.DataFrame) -> str:
+def rows_hash(frame: pl.DataFrame) -> str:
     """Order-independent content hash, comparable across extractions of a cut."""
     lines = sorted(
         json.dumps(row, ensure_ascii=False, separators=(",", ":")) for row in frame.iter_rows()

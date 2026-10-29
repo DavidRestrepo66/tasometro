@@ -21,6 +21,7 @@ from tasometro_ingestion import __version__
 from tasometro_ingestion.client import SocrataClient
 from tasometro_ingestion.ingest import SOURCES, ingest_cut
 from tasometro_ingestion.soql import EntityKey
+from tasometro_ingestion.warehouse import LoadError, load_bronze, load_catalog
 
 
 def make_client(app_token: str | None) -> SocrataClient:
@@ -65,13 +66,48 @@ def build_parser() -> argparse.ArgumentParser:
         type=_entity,
         help="restrict to entity <tipo>-<codigo>; repeatable (default: discover all)",
     )
+
+    load = commands.add_parser(
+        "load", help="load complete bronze batches into the warehouse raw schema"
+    )
+    load.add_argument("--bronze-root", required=True, type=Path, help="bronze root directory")
+    load.add_argument("--source", choices=SOURCES, help="only this dataset (default: all)")
+    load.add_argument("--fecha-corte", type=_cut_date, help="only this cut (default: all)")
+
+    commands.add_parser("catalog", help="replace the supervised-entity catalog (sr9n-792w)")
     return parser
 
 
 def main(argv: list[str] | None = None) -> int:
-    args = build_parser().parse_args(argv)
+    parser = build_parser()
+    args = parser.parse_args(argv)
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 
+    if args.command == "ingest":
+        return _ingest(args)
+    dsn = os.environ.get("WAREHOUSE_DSN")
+    if not dsn:
+        parser.error("WAREHOUSE_DSN is not set")
+    if args.command == "load":
+        try:
+            report = load_bronze(dsn, args.bronze_root, args.source, args.fecha_corte)
+        except LoadError as exc:
+            print(f"error: {exc}", file=sys.stderr)
+            return 1
+        _print({"loaded": report.loaded, "skipped": report.skipped, "rows": report.rows})
+        return 0
+    with make_client(os.environ.get("SOCRATA_APP_TOKEN") or None) as client:
+        count = load_catalog(dsn, client)
+    _print({"entities": count})
+    return 0
+
+
+def _print(summary: dict[str, object]) -> None:
+    json.dump(summary, sys.stdout)
+    sys.stdout.write("\n")
+
+
+def _ingest(args: argparse.Namespace) -> int:
     with make_client(os.environ.get("SOCRATA_APP_TOKEN") or None) as client:
         report = ingest_cut(
             client, args.bronze_root, args.source, args.fecha_corte, args.run_id, args.entity
@@ -86,6 +122,5 @@ def main(argv: list[str] | None = None) -> int:
         "zero_rate_rows": report.zero_rate_rows,
         "failed": [f"{e.tipo_entidad}-{e.codigo_entidad}" for e in report.failed],
     }
-    json.dump(summary, sys.stdout)
-    sys.stdout.write("\n")
+    _print(summary)
     return 1 if report.failed else 0
