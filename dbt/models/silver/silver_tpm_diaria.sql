@@ -10,7 +10,7 @@ with limites as (
 ),
 
 dias as (
-    select generate_series(desde, hasta, interval '1 day')::date as fecha
+    select generate_series(desde::timestamp, hasta::timestamp, interval '1 day')::date as fecha
     from limites
 )
 

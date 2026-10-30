@@ -1,8 +1,8 @@
 {{
     config(
         materialized='incremental',
-        incremental_strategy='delete+insert',
-        unique_key='fecha_corte',
+        incremental_strategy='delete_insert_cortes',
+        lote_kind='rates',
     )
 }}
 
@@ -27,8 +27,6 @@ select
     s._lote_loaded_at
 from {{ ref('silver_tasas') }} as s
 {% if is_incremental() %}
-where s.fecha_corte in (
-    select fecha_corte from {{ ref('silver_tasas') }}
-    where _lote_loaded_at > (select coalesce(max(_lote_loaded_at), '-infinity') from {{ this }})
-)
+-- Cuts come from raw.sfc_lotes, so a cut re-extracted with no rows is deleted too.
+where s.fecha_corte in ({{ cortes_a_reconstruir('rates') }})
 {% endif %}

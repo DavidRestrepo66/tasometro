@@ -15,7 +15,7 @@ with ranked as (
         loaded_at,
         row_number() over (
             partition by fecha_corte, tipo_entidad, codigo_entidad, kind
-            order by extracted_at desc, run_id desc
+            order by extracted_at desc
         ) as extraction_rank
     from {{ source('raw', 'sfc_lotes') }}
 )
