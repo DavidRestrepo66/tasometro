@@ -14,7 +14,10 @@ mart as (
     group by 1
 )
 
-select coalesce(f.fecha_corte, m.fecha_corte) as fecha_corte, f.montos, m.montos
+select
+    coalesce(f.fecha_corte, m.fecha_corte) as fecha_corte,
+    f.montos as montos_fact,
+    m.montos as montos_mart
 from fact as f
 full outer join mart as m on m.fecha_corte = f.fecha_corte
 where f.montos is distinct from m.montos
