@@ -270,3 +270,22 @@ def test_reconciling_the_connection_never_sends_an_ssl_setting(settings):
     provision.provision(settings)
 
     assert "ssl" not in _bodies(put)[0]["details"]
+
+
+def test_the_sex_gap_card_honours_the_entity_filter():
+    spec = next(s for s in provision.CARDS if s.name.startswith("Brecha por sexo"))
+    assert "entidad" in spec.tags
+
+
+@respx.mock
+def test_a_mapping_pointing_at_another_card_is_repaired(settings):
+    _mock_existing_environment()
+    respx.get(f"{BASE}/api/card").respond(json=_existing_cards())
+    broken = _complete_dashboard()
+    broken["dashcards"][0]["parameter_mappings"][0]["card_id"] = 999
+    respx.get(f"{BASE}/api/dashboard/3").respond(json=broken)
+    put = respx.put(f"{BASE}/api/dashboard/3").respond(json={"id": 3})
+
+    provision.provision(settings)
+
+    assert put.called

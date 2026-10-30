@@ -94,11 +94,12 @@ limit 50""",
   sum(b.brecha_femenino_menos_masculino * (b.creditos_femenino + b.creditos_masculino))
     / nullif(sum(b.creditos_femenino + b.creditos_masculino), 0) as brecha
 from gold.mart_brecha_sexo as b
+inner join gold.dim_entidad as e on e.entidad_key = b.entidad_key
 where true
-  {_where("b", "tipo_credito", "plazo_banda", "desde")}
+  {_where("b", "tipo_credito", "plazo_banda", "desde", "entidad")}
 group by 1
 order by 1""",
-        tags=("tipo_credito", "plazo_banda", "desde"),
+        tags=("tipo_credito", "plazo_banda", "desde", "entidad"),
         display="line",
         visualization={"graph.dimensions": ["fecha_corte"], "graph.metrics": ["brecha"]},
     ),
@@ -325,7 +326,7 @@ def _ensure_cards(client: httpx.Client, database_id: int) -> list[int]:
 def _mappings(dashcards: list[dict[str, Any]]) -> dict[Any, list[str]]:
     return {
         dashcard.get("card_id"): sorted(
-            repr((m.get("parameter_id"), m.get("target")))
+            repr((m.get("parameter_id"), m.get("card_id"), m.get("target")))
             for m in dashcard.get("parameter_mappings") or []
         )
         for dashcard in dashcards
