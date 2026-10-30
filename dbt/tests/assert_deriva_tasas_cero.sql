@@ -4,13 +4,14 @@
 -- suggests the source changed how it reports rates.
 with por_corte as (
     select
-        t.fecha_corte,
-        z.n_cero::numeric / nullif(z.n_cero + t.n_tasa, 0) as share_cero
+        coalesce(t.fecha_corte, z.fecha_corte) as fecha_corte,
+        coalesce(z.n_cero, 0)::numeric
+            / nullif(coalesce(z.n_cero, 0) + coalesce(t.n_tasa, 0), 0) as share_cero
     from (
         select fecha_corte, sum(n_registros) as n_tasa
         from {{ ref('silver_tasas') }} group by 1
     ) as t
-    inner join (
+    full outer join (
         select fecha_corte, sum(n_tasa_cero) as n_cero
         from {{ ref('silver_tasas_cero') }} group by 1
     ) as z on z.fecha_corte = t.fecha_corte
