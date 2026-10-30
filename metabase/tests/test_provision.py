@@ -225,3 +225,30 @@ def test_a_database_with_the_same_name_but_other_details_is_reconciled(settings)
         "taso",
     )
     assert not created.called
+
+
+@respx.mock
+def test_a_dashcard_without_card_id_does_not_crash_and_is_reconciled(settings):
+    _mock_existing_environment()
+    respx.get(f"{BASE}/api/card").respond(json=_existing_cards())
+    broken = _complete_dashboard()
+    broken["dashcards"][0]["card_id"] = None
+    respx.get(f"{BASE}/api/dashboard/3").respond(json=broken)
+    put = respx.put(f"{BASE}/api/dashboard/3").respond(json={"id": 3})
+
+    provision.provision(settings)
+
+    assert [d["card_id"] for d in _bodies(put)[0]["dashcards"]] == [100, 101, 102, 103]
+
+
+@respx.mock
+def test_refresh_flag_pushes_the_warehouse_password_even_when_details_match():
+    flagged = provision.Settings.from_env({**ENV, "METABASE_REFRESH_DATABASE": "1"})
+    _mock_existing_environment()
+    put = respx.put(f"{BASE}/api/database/7").respond(json={"id": 7})
+    respx.get(f"{BASE}/api/card").respond(json=_existing_cards())
+    respx.get(f"{BASE}/api/dashboard/3").respond(json=_complete_dashboard())
+
+    provision.provision(flagged)
+
+    assert _bodies(put)[0]["details"]["password"] == "secret"

@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import os
 import sys
+from collections import Counter
 from collections.abc import Mapping
 from contextlib import closing
 from dataclasses import dataclass
@@ -137,6 +138,8 @@ class Settings:
     dbname: str
     user: str
     password: str
+    # The API never returns the password, so a changed one is only pushed on request.
+    refresh_database: bool = False
 
     @classmethod
     def from_env(cls, env: Mapping[str, str]) -> Settings:
@@ -158,6 +161,7 @@ class Settings:
             dbname=env.get("METABASE_WAREHOUSE_DB", "warehouse"),
             user=env["POSTGRES_USER"],
             password=env["POSTGRES_PASSWORD"],
+            refresh_database=env.get("METABASE_REFRESH_DATABASE", "") in {"1", "true", "yes"},
         )
 
 
@@ -273,7 +277,7 @@ def ensure_database(client: httpx.Client, settings: Settings) -> int:
     listing = client.get("/api/database").raise_for_status().json()
     for database in listing["data"]:
         if database["name"] == DATABASE_NAME:
-            if not _database_matches(database, payload):
+            if settings.refresh_database or not _database_matches(database, payload):
                 client.put(f"/api/database/{database['id']}", json=payload).raise_for_status()
             return database["id"]
     created = client.post("/api/database", json=payload)
@@ -333,7 +337,7 @@ def _is_complete(dashboard: dict[str, Any], card_ids: list[int]) -> bool:
     placed = [dashcard.get("card_id") for dashcard in dashcards]
     parameters = {parameter.get("id") for parameter in dashboard.get("parameters") or []}
     return (
-        sorted(placed) == sorted(card_ids)
+        Counter(placed) == Counter(card_ids)
         and parameters == set(FILTERS)
         and _mappings(dashcards) == _mappings(build_dashcards(card_ids))
     )
