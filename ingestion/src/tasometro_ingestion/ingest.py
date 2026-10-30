@@ -71,7 +71,7 @@ def ingest_cut(
                     bronze_root,
                     BronzeBatch(source, fecha_corte, run_id, entity, kind, queries[kind], rows),
                 )
-        except OSError:
+        except (OSError, ValueError):
             # A batch without its manifest is incomplete and ignored by the loader.
             log.exception("write failed for entity %s-%s", *_key(entity))
             report.failed.append(entity)
