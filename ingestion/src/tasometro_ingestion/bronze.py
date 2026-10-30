@@ -78,8 +78,8 @@ def write_batch(root: Path, batch: BronzeBatch) -> WrittenBatch:
     """Write ``batch`` under ``root`` and return where it landed."""
     validate_run_id(batch.run_id)
 
+    validate_rows(batch.kind, batch.rows)
     columns = _SCHEMAS[batch.kind]
-    _check_columns(batch.rows, columns)
     frame = pl.DataFrame(
         [[row.get(c) for c in columns] for row in batch.rows],
         schema=dict.fromkeys(columns, pl.String),
@@ -120,6 +120,11 @@ def write_batch(root: Path, batch: BronzeBatch) -> WrittenBatch:
     _atomic_write(manifest_path, lambda tmp: tmp.write_text(payload, encoding="utf-8"))
 
     return WrittenBatch(data_path, manifest_path, frame.height, rows_sha256)
+
+
+def validate_rows(kind: BatchKind, rows: Sequence[Mapping[str, Any]]) -> None:
+    """Raise ValueError when ``rows`` carry columns outside the schema of ``kind``."""
+    _check_columns(rows, _SCHEMAS[kind])
 
 
 def _check_columns(rows: Sequence[Mapping[str, Any]], columns: tuple[str, ...]) -> None:

@@ -244,3 +244,27 @@ def test_schema_drift_is_reported_per_entity_and_later_entities_still_land(
     assert report.entities == 1
     names = sorted(p.name for p in tmp_path.rglob("*.manifest.json"))
     assert names == ["rates_1-7.manifest.json", "zero_rates_1-7.manifest.json"]
+
+
+def test_schema_drift_in_one_batch_publishes_no_batch_of_the_entity(tmp_path: Path) -> None:
+    class ZeroRateDriftClient(FakeClient):
+        def fetch_all(self, dataset: str, query: Mapping[str, str]) -> list[dict[str, str]]:
+            rows = super().fetch_all(dataset, query)
+            where = query["$where"]
+            if "codigo_entidad = '1'" in where and "tasa_efectiva_promedio = 0" in where:
+                return [{**row, "columna_nueva": "x"} for row in rows]
+            return rows
+
+    client = ZeroRateDriftClient([("1", "1"), ("1", "7")])
+
+    report = ingest_cut(client, tmp_path, "qzsc-9esp", CUT, RUN_ID)
+
+    assert report.failed == [EntityKey("1", "1")]
+    assert report.entities == 1
+    names = sorted(p.name for p in tmp_path.rglob("*") if p.is_file())
+    assert names == [
+        "rates_1-7.manifest.json",
+        "rates_1-7.parquet",
+        "zero_rates_1-7.manifest.json",
+        "zero_rates_1-7.parquet",
+    ]

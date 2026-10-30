@@ -13,7 +13,7 @@ from datetime import date
 from pathlib import Path
 from typing import Any, Protocol
 
-from tasometro_ingestion.bronze import BatchKind, BronzeBatch, write_batch
+from tasometro_ingestion.bronze import BatchKind, BronzeBatch, validate_rows, write_batch
 from tasometro_ingestion.soql import EntityKey, entities_query, rates_query, zero_rate_query
 
 log = logging.getLogger(__name__)
@@ -66,6 +66,10 @@ def ingest_cut(
             continue
 
         try:
+            # Validate every batch before writing any, so schema drift in one
+            # batch cannot leave the other one published.
+            for kind, rows in results.items():
+                validate_rows(kind, rows)
             for kind, rows in results.items():
                 write_batch(
                     bronze_root,
