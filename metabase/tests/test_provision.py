@@ -90,9 +90,20 @@ def _complete_dashboard() -> dict:
     return {
         "id": 3,
         "name": provision.DASHBOARD_NAME,
-        "dashcards": [{"card_id": 100 + i} for i in range(4)],
+        "dashcards": provision.build_dashcards([100 + i for i in range(4)]),
         "parameters": provision.dashboard_parameters(),
     }
+
+
+def _database_listing(**overrides) -> dict:
+    database = {
+        "id": 7,
+        "name": provision.DATABASE_NAME,
+        "engine": "postgres",
+        "details": {"host": "postgres", "port": 5432, "dbname": "warehouse", "user": "taso"},
+    }
+    database.update(overrides)
+    return {"data": [database]}
 
 
 def _mock_existing_environment() -> None:
@@ -100,9 +111,7 @@ def _mock_existing_environment() -> None:
         json={"has-user-setup": True, "setup-token": "stale"}
     )
     respx.post(f"{BASE}/api/session").respond(json={"id": "session-2"})
-    respx.get(f"{BASE}/api/database").respond(
-        json={"data": [{"id": 7, "name": provision.DATABASE_NAME}]}
-    )
+    respx.get(f"{BASE}/api/database").respond(json=_database_listing())
     respx.get(f"{BASE}/api/dashboard").respond(json=[{"id": 3, "name": provision.DASHBOARD_NAME}])
 
 
@@ -117,6 +126,7 @@ def test_second_run_logs_in_and_creates_nothing(settings):
         respx.post(f"{BASE}/api/card"),
         respx.post(f"{BASE}/api/dashboard"),
         respx.put(f"{BASE}/api/dashboard/3"),
+        respx.put(f"{BASE}/api/database/7"),
     ]
 
     url = provision.provision(settings)
@@ -175,3 +185,43 @@ def test_a_rejected_login_stops_before_touching_anything(settings):
         provision.provision(settings)
 
     assert not database.called
+
+
+@respx.mock
+def test_a_dashboard_with_missing_parameter_mappings_is_completed(settings):
+    _mock_existing_environment()
+    respx.get(f"{BASE}/api/card").respond(json=_existing_cards())
+    broken = _complete_dashboard()
+    broken["dashcards"][0]["parameter_mappings"] = []
+    respx.get(f"{BASE}/api/dashboard/3").respond(json=broken)
+    put = respx.put(f"{BASE}/api/dashboard/3").respond(json={"id": 3})
+
+    provision.provision(settings)
+
+    mappings = _bodies(put)[0]["dashcards"][0]["parameter_mappings"]
+    assert {m["parameter_id"] for m in mappings} == set(provision.CARDS[0].tags)
+
+
+@respx.mock
+def test_a_database_with_the_same_name_but_other_details_is_reconciled(settings):
+    respx.get(f"{BASE}/api/session/properties").respond(json={"has-user-setup": True})
+    respx.post(f"{BASE}/api/session").respond(json={"id": "session-2"})
+    wrong = _database_listing(
+        details={"host": "elsewhere", "port": 5432, "dbname": "x", "user": "u"}
+    )
+    respx.get(f"{BASE}/api/database").respond(json=wrong)
+    put = respx.put(f"{BASE}/api/database/7").respond(json={"id": 7})
+    created = respx.post(f"{BASE}/api/database")
+    respx.get(f"{BASE}/api/dashboard").respond(json=[{"id": 3, "name": provision.DASHBOARD_NAME}])
+    respx.get(f"{BASE}/api/card").respond(json=_existing_cards())
+    respx.get(f"{BASE}/api/dashboard/3").respond(json=_complete_dashboard())
+
+    provision.provision(settings)
+
+    details = _bodies(put)[0]["details"]
+    assert (details["host"], details["dbname"], details["user"]) == (
+        "postgres",
+        "warehouse",
+        "taso",
+    )
+    assert not created.called

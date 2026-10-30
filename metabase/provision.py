@@ -243,27 +243,40 @@ def open_session(settings: Settings) -> httpx.Client:
     return client
 
 
+def _database_payload(settings: Settings) -> dict[str, Any]:
+    return {
+        "name": DATABASE_NAME,
+        "engine": "postgres",
+        "is_full_sync": True,
+        "details": {
+            "host": settings.host,
+            "port": settings.port,
+            "dbname": settings.dbname,
+            "user": settings.user,
+            "password": settings.password,
+            "ssl": False,
+        },
+    }
+
+
+def _database_matches(database: Mapping[str, Any], payload: Mapping[str, Any]) -> bool:
+    # The password is never returned by the API, so it is not compared.
+    keys = ("host", "port", "dbname", "user")
+    current = database.get("details") or {}
+    return database.get("engine") == payload["engine"] and all(
+        current.get(key) == payload["details"][key] for key in keys
+    )
+
+
 def ensure_database(client: httpx.Client, settings: Settings) -> int:
+    payload = _database_payload(settings)
     listing = client.get("/api/database").raise_for_status().json()
     for database in listing["data"]:
         if database["name"] == DATABASE_NAME:
+            if not _database_matches(database, payload):
+                client.put(f"/api/database/{database['id']}", json=payload).raise_for_status()
             return database["id"]
-    created = client.post(
-        "/api/database",
-        json={
-            "name": DATABASE_NAME,
-            "engine": "postgres",
-            "is_full_sync": True,
-            "details": {
-                "host": settings.host,
-                "port": settings.port,
-                "dbname": settings.dbname,
-                "user": settings.user,
-                "password": settings.password,
-                "ssl": False,
-            },
-        },
-    )
+    created = client.post("/api/database", json=payload)
     return created.raise_for_status().json()["id"]
 
 
@@ -305,10 +318,25 @@ def _ensure_cards(client: httpx.Client, database_id: int) -> list[int]:
     return card_ids
 
 
+def _mappings(dashcards: list[dict[str, Any]]) -> dict[Any, list[str]]:
+    return {
+        dashcard.get("card_id"): sorted(
+            repr((m.get("parameter_id"), m.get("target")))
+            for m in dashcard.get("parameter_mappings") or []
+        )
+        for dashcard in dashcards
+    }
+
+
 def _is_complete(dashboard: dict[str, Any], card_ids: list[int]) -> bool:
-    placed = [dashcard.get("card_id") for dashcard in dashboard.get("dashcards") or []]
+    dashcards = dashboard.get("dashcards") or []
+    placed = [dashcard.get("card_id") for dashcard in dashcards]
     parameters = {parameter.get("id") for parameter in dashboard.get("parameters") or []}
-    return sorted(placed) == sorted(card_ids) and parameters == set(FILTERS)
+    return (
+        sorted(placed) == sorted(card_ids)
+        and parameters == set(FILTERS)
+        and _mappings(dashcards) == _mappings(build_dashcards(card_ids))
+    )
 
 
 def provision(settings: Settings) -> str:
