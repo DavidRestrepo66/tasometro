@@ -294,21 +294,26 @@ def ensure_dashboard(client: httpx.Client, database_id: int) -> int:
         current = client.get(f"/api/dashboard/{dashboard_id}").raise_for_status().json()
         if _is_complete(current, card_ids):
             return dashboard_id
-        dashcards = _merge_dashcards(current.get("dashcards") or [], card_ids)
+        tabs = current.get("tabs") or []
+        dashcards = _merge_dashcards(current.get("dashcards") or [], card_ids, tabs)
     else:
         created = client.post(
             "/api/dashboard", json={"name": DASHBOARD_NAME, "parameters": dashboard_parameters()}
         )
         dashboard_id = created.raise_for_status().json()["id"]
+        tabs = []
         dashcards = build_dashcards(card_ids)
+    # Omitting existing tabs from the PUT would delete them.
     client.put(
         f"/api/dashboard/{dashboard_id}",
-        json={"dashcards": dashcards, "parameters": dashboard_parameters()},
+        json={"dashcards": dashcards, "tabs": tabs, "parameters": dashboard_parameters()},
     ).raise_for_status()
     return dashboard_id
 
 
-def _merge_dashcards(current: list[dict[str, Any]], card_ids: list[int]) -> list[dict[str, Any]]:
+def _merge_dashcards(
+    current: list[dict[str, Any]], card_ids: list[int], tabs: list[dict[str, Any]]
+) -> list[dict[str, Any]]:
     """Desired dashcards that reuse the ids of existing ones; other dashcards are kept as-is.
 
     Metabase deletes any existing dashcard omitted from the PUT payload, and a negative
@@ -319,7 +324,8 @@ def _merge_dashcards(current: list[dict[str, Any]], card_ids: list[int]) -> list
     for desired in build_dashcards(card_ids):
         match = next((c for c in pool if c.get("card_id") == desired["card_id"]), None)
         if match is None:
-            merged.append(desired)
+            # On a tabbed dashboard every dashcard must belong to an existing tab.
+            merged.append({**desired, "dashboard_tab_id": tabs[0]["id"]} if tabs else desired)
             continue
         pool.remove(match)
         merged.append({**match, **desired, "id": match["id"]})
@@ -376,7 +382,9 @@ def _mappings(dashcards: list[dict[str, Any]]) -> dict[Any, list[str]]:
 
 
 def _is_complete(dashboard: dict[str, Any], card_ids: list[int]) -> bool:
-    dashcards = dashboard.get("dashcards") or []
+    # Only the dashcards this script manages are checked; extra ones are left alone.
+    managed = set(card_ids)
+    dashcards = [d for d in dashboard.get("dashcards") or [] if d.get("card_id") in managed]
     placed = [dashcard.get("card_id") for dashcard in dashcards]
     parameters = {parameter.get("id") for parameter in dashboard.get("parameters") or []}
     return (

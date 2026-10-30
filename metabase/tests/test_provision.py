@@ -337,3 +337,36 @@ def test_repairing_a_dashboard_keeps_existing_dashcard_ids_and_extra_dashcards(s
     assert [d["id"] for d in sent] == [11, 12, 13, 14, 50]
     assert sent[-1] == extra
     assert all(d["parameter_mappings"] for d in sent[:4])
+
+
+@respx.mock
+def test_extra_dashcards_do_not_make_a_complete_dashboard_incomplete(settings):
+    _mock_existing_environment()
+    respx.get(f"{BASE}/api/card").respond(json=_existing_cards())
+    current = _complete_dashboard()
+    current["dashcards"].append({"id": 50, "card_id": 500, "parameter_mappings": []})
+    respx.get(f"{BASE}/api/dashboard/3").respond(json=current)
+    put = respx.put(f"{BASE}/api/dashboard/3").respond(json={"id": 3})
+
+    provision.provision(settings)
+
+    assert not put.called
+
+
+@respx.mock
+def test_repairing_a_dashboard_keeps_its_tabs_and_places_new_dashcards_on_one(settings):
+    _mock_existing_environment()
+    respx.get(f"{BASE}/api/card").respond(json=_existing_cards())
+    current = _complete_dashboard()
+    current["tabs"] = [{"id": 5, "name": "Main"}]
+    current["dashcards"] = [
+        {**d, "id": 11 + i, "dashboard_tab_id": 5} for i, d in enumerate(current["dashcards"][:3])
+    ]
+    respx.get(f"{BASE}/api/dashboard/3").respond(json=current)
+    put = respx.put(f"{BASE}/api/dashboard/3").respond(json={"id": 3})
+
+    provision.provision(settings)
+
+    body = _bodies(put)[0]
+    assert body["tabs"] == [{"id": 5, "name": "Main"}]
+    assert [d["dashboard_tab_id"] for d in body["dashcards"]] == [5, 5, 5, 5]
