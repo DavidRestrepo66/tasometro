@@ -113,7 +113,7 @@ def write_batch(root: Path, batch: BronzeBatch) -> WrittenBatch:
         "row_count": frame.height,
         "rows_sha256": rows_sha256,
         "soql": dict(batch.query),
-        "extracted_at": datetime.now(UTC).isoformat(timespec="seconds"),
+        "extracted_at": datetime.now(UTC).isoformat(timespec="microseconds"),
         "ingestion_version": __version__,
     }
     payload = json.dumps(manifest, ensure_ascii=False, indent=2) + "\n"

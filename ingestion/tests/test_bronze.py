@@ -1,4 +1,5 @@
 import json
+import re
 from dataclasses import replace
 from datetime import date
 from pathlib import Path
@@ -85,6 +86,7 @@ def test_manifest_records_rows_hash_query_and_identity(tmp_path: Path) -> None:
     assert manifest["data_file"] == "rates_1-7.parquet"
     assert len(manifest["rows_sha256"]) == 64
     assert manifest["extracted_at"].endswith("+00:00")
+    assert re.fullmatch(r"\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d\.\d{6}\+00:00", manifest["extracted_at"])
 
 
 def test_rows_hash_ignores_row_order_but_not_values(tmp_path: Path) -> None:
