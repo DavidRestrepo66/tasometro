@@ -31,3 +31,19 @@ seeds:
           - accepted_values:
               arguments:
                 values: ["Hasta 1 año", "1 a 3 años", "3 a 5 años", "Más de 5 años", "Sin plazo"]
+
+  - name: tipo_tasa_clases
+    description: >
+      Classifies every tipo_de_tasa. Only en_spread rates are compared with the
+      TPM; real rates (UVR, IPC) are not. es_ambigua marks types whose meaning
+      the source does not define; they enter the spread but are flagged.
+    config:
+      column_types: {en_spread: boolean, es_ambigua: boolean}
+    columns:
+      - name: tipo_de_tasa
+        data_tests: [unique, not_null]
+      - name: clase_tasa
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: ["Fija", "Indexada", "Otra", "Real"]

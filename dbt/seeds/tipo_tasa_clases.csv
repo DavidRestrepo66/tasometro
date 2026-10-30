@@ -1,0 +1,16 @@
+tipo_de_tasa,clase_tasa,en_spread,es_ambigua
+FS,Fija,true,false
+DTF,Indexada,true,false
+DTFE,Indexada,true,false
+IBR,Indexada,true,false
+IB1,Indexada,true,false
+IB3,Indexada,true,false
+IB6,Indexada,true,false
+IBE,Indexada,true,false
+-DTF,Indexada,true,true
+LIB3,Indexada,true,true
+OTR,Otra,true,true
+CEC$,Otra,true,true
+VUVR,Real,false,false
+CECUVR,Real,false,false
+IPC,Real,false,false
