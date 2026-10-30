@@ -268,27 +268,47 @@ def ensure_database(client: httpx.Client, settings: Settings) -> int:
 
 
 def ensure_dashboard(client: httpx.Client, database_id: int) -> int:
+    card_ids = _ensure_cards(client, database_id)
     existing = client.get("/api/dashboard").raise_for_status().json()
-    for dashboard in existing:
-        if dashboard["name"] == DASHBOARD_NAME:
-            return dashboard["id"]
-    cards = {c["name"]: c["id"] for c in client.get("/api/card").raise_for_status().json()}
-    card_ids = []
-    for spec in CARDS:
-        if spec.name in cards:
-            card_ids.append(cards[spec.name])
-            continue
-        created = client.post("/api/card", json=build_card(spec, database_id))
-        card_ids.append(created.raise_for_status().json()["id"])
-    dashboard = client.post(
-        "/api/dashboard", json={"name": DASHBOARD_NAME, "parameters": dashboard_parameters()}
-    )
-    dashboard_id = dashboard.raise_for_status().json()["id"]
+    dashboard_id = next((d["id"] for d in existing if d["name"] == DASHBOARD_NAME), None)
+    if dashboard_id is not None:
+        # A previous run may have created the dashboard and failed before filling it.
+        current = client.get(f"/api/dashboard/{dashboard_id}").raise_for_status().json()
+        if _is_complete(current, card_ids):
+            return dashboard_id
+    else:
+        created = client.post(
+            "/api/dashboard", json={"name": DASHBOARD_NAME, "parameters": dashboard_parameters()}
+        )
+        dashboard_id = created.raise_for_status().json()["id"]
     client.put(
         f"/api/dashboard/{dashboard_id}",
         json={"dashcards": build_dashcards(card_ids), "parameters": dashboard_parameters()},
     ).raise_for_status()
     return dashboard_id
+
+
+def _ensure_cards(client: httpx.Client, database_id: int) -> list[int]:
+    # Reuse a card by name only when it queries the requested database.
+    reusable = {
+        card["name"]: card["id"]
+        for card in client.get("/api/card").raise_for_status().json()
+        if (card.get("dataset_query") or {}).get("database") == database_id
+    }
+    card_ids = []
+    for spec in CARDS:
+        if spec.name in reusable:
+            card_ids.append(reusable[spec.name])
+            continue
+        created = client.post("/api/card", json=build_card(spec, database_id))
+        card_ids.append(created.raise_for_status().json()["id"])
+    return card_ids
+
+
+def _is_complete(dashboard: dict[str, Any], card_ids: list[int]) -> bool:
+    placed = [dashcard.get("card_id") for dashcard in dashboard.get("dashcards") or []]
+    parameters = {parameter.get("id") for parameter in dashboard.get("parameters") or []}
+    return sorted(placed) == sorted(card_ids) and parameters == set(FILTERS)
 
 
 def provision(settings: Settings) -> str:

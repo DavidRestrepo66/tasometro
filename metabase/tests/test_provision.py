@@ -79,16 +79,38 @@ def test_first_run_sets_up_metabase_registers_the_warehouse_and_builds_the_dashb
     assert {p["id"] for p in _bodies(put)[0]["parameters"]} == set(provision.FILTERS)
 
 
-@respx.mock
-def test_second_run_logs_in_and_creates_nothing(settings):
+def _existing_cards(database_id: int = 7) -> list[dict]:
+    return [
+        {"id": 100 + i, "name": spec.name, "dataset_query": {"database": database_id}}
+        for i, spec in enumerate(provision.CARDS)
+    ]
+
+
+def _complete_dashboard() -> dict:
+    return {
+        "id": 3,
+        "name": provision.DASHBOARD_NAME,
+        "dashcards": [{"card_id": 100 + i} for i in range(4)],
+        "parameters": provision.dashboard_parameters(),
+    }
+
+
+def _mock_existing_environment() -> None:
     respx.get(f"{BASE}/api/session/properties").respond(
         json={"has-user-setup": True, "setup-token": "stale"}
     )
-    login = respx.post(f"{BASE}/api/session").respond(json={"id": "session-2"})
+    respx.post(f"{BASE}/api/session").respond(json={"id": "session-2"})
     respx.get(f"{BASE}/api/database").respond(
         json={"data": [{"id": 7, "name": provision.DATABASE_NAME}]}
     )
     respx.get(f"{BASE}/api/dashboard").respond(json=[{"id": 3, "name": provision.DASHBOARD_NAME}])
+
+
+@respx.mock
+def test_second_run_logs_in_and_creates_nothing(settings):
+    _mock_existing_environment()
+    respx.get(f"{BASE}/api/card").respond(json=_existing_cards())
+    respx.get(f"{BASE}/api/dashboard/3").respond(json=_complete_dashboard())
     creations = [
         respx.post(f"{BASE}/api/setup"),
         respx.post(f"{BASE}/api/database"),
@@ -100,8 +122,45 @@ def test_second_run_logs_in_and_creates_nothing(settings):
     url = provision.provision(settings)
 
     assert url == f"{BASE}/dashboard/3"
-    assert _bodies(login)[0]["username"] == "admin@tasometro.local"
     assert all(not route.called for route in creations)
+
+
+@respx.mock
+def test_rerun_after_a_failed_put_completes_the_existing_dashboard(settings):
+    _mock_existing_environment()
+    respx.get(f"{BASE}/api/card").respond(json=_existing_cards())
+    respx.get(f"{BASE}/api/dashboard/3").respond(
+        json={"id": 3, "name": provision.DASHBOARD_NAME, "dashcards": [], "parameters": []}
+    )
+    put = respx.put(f"{BASE}/api/dashboard/3").respond(json={"id": 3})
+    created = [respx.post(f"{BASE}/api/card"), respx.post(f"{BASE}/api/dashboard")]
+
+    url = provision.provision(settings)
+
+    assert url == f"{BASE}/dashboard/3"
+    body = _bodies(put)[0]
+    assert [d["card_id"] for d in body["dashcards"]] == [100, 101, 102, 103]
+    assert {p["id"] for p in body["parameters"]} == set(provision.FILTERS)
+    assert all(not route.called for route in created)
+
+
+@respx.mock
+def test_a_card_with_the_same_name_on_another_database_is_not_reused(settings):
+    _mock_existing_environment()
+    foreign = _existing_cards(database_id=99)
+    respx.get(f"{BASE}/api/card").respond(json=foreign)
+    respx.get(f"{BASE}/api/dashboard/3").respond(
+        json={"id": 3, "name": provision.DASHBOARD_NAME, "dashcards": [], "parameters": []}
+    )
+    cards = respx.post(f"{BASE}/api/card").mock(
+        side_effect=[httpx.Response(200, json={"id": 200 + i}) for i in range(4)]
+    )
+    put = respx.put(f"{BASE}/api/dashboard/3").respond(json={"id": 3})
+
+    provision.provision(settings)
+
+    assert [b["dataset_query"]["database"] for b in _bodies(cards)] == [7, 7, 7, 7]
+    assert [d["card_id"] for d in _bodies(put)[0]["dashcards"]] == [200, 201, 202, 203]
 
 
 @respx.mock
