@@ -294,32 +294,74 @@ def ensure_dashboard(client: httpx.Client, database_id: int) -> int:
         current = client.get(f"/api/dashboard/{dashboard_id}").raise_for_status().json()
         if _is_complete(current, card_ids):
             return dashboard_id
+        dashcards = _merge_dashcards(current.get("dashcards") or [], card_ids)
     else:
         created = client.post(
             "/api/dashboard", json={"name": DASHBOARD_NAME, "parameters": dashboard_parameters()}
         )
         dashboard_id = created.raise_for_status().json()["id"]
+        dashcards = build_dashcards(card_ids)
     client.put(
         f"/api/dashboard/{dashboard_id}",
-        json={"dashcards": build_dashcards(card_ids), "parameters": dashboard_parameters()},
+        json={"dashcards": dashcards, "parameters": dashboard_parameters()},
     ).raise_for_status()
     return dashboard_id
+
+
+def _merge_dashcards(current: list[dict[str, Any]], card_ids: list[int]) -> list[dict[str, Any]]:
+    """Desired dashcards that reuse the ids of existing ones; other dashcards are kept as-is.
+
+    Metabase deletes any existing dashcard omitted from the PUT payload, and a negative
+    id creates a new one, so managed dashcards must keep their ids.
+    """
+    pool = list(current)
+    merged = []
+    for desired in build_dashcards(card_ids):
+        match = next((c for c in pool if c.get("card_id") == desired["card_id"]), None)
+        if match is None:
+            merged.append(desired)
+            continue
+        pool.remove(match)
+        merged.append({**match, **desired, "id": match["id"]})
+    return [*merged, *pool]
+
+
+def _card_matches(card: Mapping[str, Any], spec: CardSpec, database_id: int) -> bool:
+    expected = build_card(spec, database_id)["dataset_query"]["native"]
+    native = (card.get("dataset_query") or {}).get("native") or {}
+    if native.get("query") != expected["query"]:
+        return False
+    tags = native.get("template-tags") or {}
+    if set(tags) != set(expected["template-tags"]):
+        return False
+    # Metabase adds its own keys to persisted tags; only the ones we manage are compared.
+    return all(
+        tags[name].get(key) == value
+        for name, tag in expected["template-tags"].items()
+        for key, value in tag.items()
+    )
 
 
 def _ensure_cards(client: httpx.Client, database_id: int) -> list[int]:
     # Reuse a card by name only when it queries the requested database.
     reusable = {
-        card["name"]: card["id"]
+        card["name"]: card
         for card in client.get("/api/card").raise_for_status().json()
         if (card.get("dataset_query") or {}).get("database") == database_id
     }
     card_ids = []
     for spec in CARDS:
-        if spec.name in reusable:
-            card_ids.append(reusable[spec.name])
+        card = reusable.get(spec.name)
+        if card is None:
+            created = client.post("/api/card", json=build_card(spec, database_id))
+            card_ids.append(created.raise_for_status().json()["id"])
             continue
-        created = client.post("/api/card", json=build_card(spec, database_id))
-        card_ids.append(created.raise_for_status().json()["id"])
+        if not _card_matches(card, spec, database_id):
+            client.put(
+                f"/api/card/{card['id']}",
+                json={"dataset_query": build_card(spec, database_id)["dataset_query"]},
+            ).raise_for_status()
+        card_ids.append(card["id"])
     return card_ids
 
 

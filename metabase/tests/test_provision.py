@@ -81,7 +81,11 @@ def test_first_run_sets_up_metabase_registers_the_warehouse_and_builds_the_dashb
 
 def _existing_cards(database_id: int = 7) -> list[dict]:
     return [
-        {"id": 100 + i, "name": spec.name, "dataset_query": {"database": database_id}}
+        {
+            "id": 100 + i,
+            "name": spec.name,
+            "dataset_query": provision.build_card(spec, database_id)["dataset_query"],
+        }
         for i, spec in enumerate(provision.CARDS)
     ]
 
@@ -127,6 +131,7 @@ def test_second_run_logs_in_and_creates_nothing(settings):
         respx.post(f"{BASE}/api/dashboard"),
         respx.put(f"{BASE}/api/dashboard/3"),
         respx.put(f"{BASE}/api/database/7"),
+        respx.put(url__regex=rf"{BASE}/api/card/\d+"),
     ]
 
     url = provision.provision(settings)
@@ -238,7 +243,8 @@ def test_a_dashcard_without_card_id_does_not_crash_and_is_reconciled(settings):
 
     provision.provision(settings)
 
-    assert [d["card_id"] for d in _bodies(put)[0]["dashcards"]] == [100, 101, 102, 103]
+    managed = _bodies(put)[0]["dashcards"][:4]
+    assert [d["card_id"] for d in managed] == [100, 101, 102, 103]
 
 
 @respx.mock
@@ -289,3 +295,45 @@ def test_a_mapping_pointing_at_another_card_is_repaired(settings):
     provision.provision(settings)
 
     assert put.called
+
+
+@respx.mock
+def test_a_card_whose_definition_drifted_is_updated_and_others_are_left_alone(settings):
+    _mock_existing_environment()
+    cards = _existing_cards()
+    cards[2]["dataset_query"]["native"]["query"] = "select 1"
+    cards[2]["dataset_query"]["native"]["template-tags"].pop("entidad")
+    respx.get(f"{BASE}/api/card").respond(json=cards)
+    respx.get(f"{BASE}/api/dashboard/3").respond(json=_complete_dashboard())
+    drifted = respx.put(f"{BASE}/api/card/102").respond(json={"id": 102})
+    others = respx.put(url__regex=rf"{BASE}/api/card/(100|101|103)")
+
+    provision.provision(settings)
+
+    sent = _bodies(drifted)[0]["dataset_query"]["native"]
+    expected = provision.build_card(provision.CARDS[2], 7)["dataset_query"]["native"]
+    assert sent == expected
+    assert "entidad" in sent["template-tags"]
+    assert not others.called
+
+
+@respx.mock
+def test_repairing_a_dashboard_keeps_existing_dashcard_ids_and_extra_dashcards(settings):
+    _mock_existing_environment()
+    respx.get(f"{BASE}/api/card").respond(json=_existing_cards())
+    current = _complete_dashboard()
+    for index, dashcard in enumerate(current["dashcards"]):
+        dashcard["id"] = 11 + index
+        dashcard["parameter_mappings"] = []
+    extra = {"id": 50, "card_id": 500, "row": 16, "col": 0, "size_x": 6, "size_y": 4,
+             "visualization_settings": {"keep": "me"}, "parameter_mappings": []}  # fmt: skip
+    current["dashcards"].append(extra)
+    respx.get(f"{BASE}/api/dashboard/3").respond(json=current)
+    put = respx.put(f"{BASE}/api/dashboard/3").respond(json={"id": 3})
+
+    provision.provision(settings)
+
+    sent = _bodies(put)[0]["dashcards"]
+    assert [d["id"] for d in sent] == [11, 12, 13, 14, 50]
+    assert sent[-1] == extra
+    assert all(d["parameter_mappings"] for d in sent[:4])
