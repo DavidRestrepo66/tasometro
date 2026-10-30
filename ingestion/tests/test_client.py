@@ -139,3 +139,32 @@ def test_caller_cannot_override_pagination_parameters() -> None:
 def test_dataset_id_must_be_a_socrata_four_by_four(dataset: str) -> None:
     with make_client() as client, pytest.raises(ValueError, match="dataset id"):
         client.fetch_all(dataset, QUERY)
+
+
+def test_page_size_above_the_soda2_maximum_is_rejected() -> None:
+    with pytest.raises(ValueError, match="50000"):
+        make_client(page_size=50_001)
+
+
+def test_page_size_at_the_soda2_maximum_is_accepted() -> None:
+    make_client(page_size=50_000).close()
+
+
+def test_app_token_requires_an_https_base_url() -> None:
+    with pytest.raises(ValueError, match="https"):
+        make_client(base_url="http://example.test", app_token="secret-token")
+
+
+def test_plain_http_is_allowed_without_a_token() -> None:
+    make_client(base_url="http://example.test").close()
+
+
+@respx.mock
+def test_redirect_responses_raise_socrata_error() -> None:
+    route = respx.get(URL).mock(
+        return_value=httpx.Response(302, headers={"Location": "https://other.test/x"})
+    )
+
+    with make_client() as client, pytest.raises(SocrataError, match="302"):
+        client.fetch_all("abcd-1234", QUERY)
+    assert route.call_count == 1

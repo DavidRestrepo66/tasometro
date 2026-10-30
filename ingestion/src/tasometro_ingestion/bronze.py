@@ -9,7 +9,8 @@ Layout::
 A retry of the same run rewrites only its own files; files from other runs are
 never touched, so bronze is idempotent per run and immutable across runs.
 Both files are written to a temporary name and atomically renamed, and the
-manifest is written last, so a manifest marks a complete batch.
+manifest is withdrawn before a retry replaces the data and written last, so
+a manifest always marks a complete batch that matches its data.
 
 Values are stored as the raw strings returned by Socrata. Typing belongs to
 silver, where it is tested.
@@ -91,6 +92,9 @@ def write_batch(root: Path, batch: BronzeBatch) -> WrittenBatch:
     data_path = directory / f"{stem}.parquet"
     manifest_path = directory / f"{stem}.manifest.json"
 
+    # Withdraw the previous manifest first: while the data file is replaced, a
+    # manifest must never describe data it no longer matches.
+    manifest_path.unlink(missing_ok=True)
     _atomic_write(data_path, lambda tmp: frame.write_parquet(tmp))
     manifest = {
         "source": batch.source,

@@ -20,6 +20,7 @@ from tenacity import (
 )
 
 DEFAULT_BASE_URL = "https://www.datos.gov.co"
+MAX_PAGE_SIZE = 50_000
 _DATASET_ID = re.compile(r"[a-z0-9]{4}-[a-z0-9]{4}")
 _RESERVED = frozenset({"$limit", "$offset"})
 
@@ -58,6 +59,10 @@ class SocrataClient:
     ) -> None:
         if page_size < 1 or max_attempts < 1:
             raise ValueError("page_size and max_attempts must be positive")
+        if page_size > MAX_PAGE_SIZE:
+            raise ValueError(f"page_size must not exceed {MAX_PAGE_SIZE} (SODA 2.0 limit)")
+        if app_token and not base_url.lower().startswith("https://"):
+            raise ValueError("an app_token may only be sent over an https base_url")
         headers = {"Accept": "application/json"}
         if app_token:
             headers["X-App-Token"] = app_token
@@ -126,7 +131,7 @@ class SocrataClient:
         response = self._http.get(path, params=params)
         if response.status_code == 429 or response.status_code >= 500:
             raise _RetryableStatus(response)
-        if response.is_error:
+        if not response.is_success:
             raise SocrataError(_describe(response))
         return response
 
