@@ -125,6 +125,7 @@ def load_bronze(
             frame = _read_checked(manifest_path, manifest)
             with conn.transaction():
                 _replace_batch(conn, manifest, frame)
+            conn.commit()  # explicit: a later failure must not roll this batch back
             report.loaded += 1
             report.rows += frame.height
     return report
@@ -170,7 +171,10 @@ def _read_checked(manifest_path: Path, manifest: dict[str, Any]) -> pl.DataFrame
     data_path = manifest_path.with_name(manifest["data_file"])
     if not data_path.is_file():
         raise LoadError(f"missing data file for {manifest_path}")
-    frame = pl.read_parquet(data_path)
+    try:
+        frame = pl.read_parquet(data_path)
+    except (OSError, pl.exceptions.PolarsError) as exc:
+        raise LoadError(f"unreadable data file {data_path}: {exc}") from exc
     _, columns = _TABLES[BatchKind(manifest["kind"])]
     if tuple(frame.columns) != columns:
         raise LoadError(f"unexpected columns in {data_path}: {frame.columns}")
