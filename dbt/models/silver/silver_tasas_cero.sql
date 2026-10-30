@@ -1,8 +1,8 @@
 {{
     config(
         materialized='incremental',
-        incremental_strategy='delete+insert',
-        unique_key='fecha_corte',
+        incremental_strategy='delete_insert_cortes',
+        lote_kind='zero_rates',
     )
 }}
 
@@ -12,11 +12,7 @@ with lotes as (
     select * from {{ ref('stg_sfc__lotes_vigentes') }}
     where kind = 'zero_rates'
     {% if is_incremental() %}
-      and fecha_corte in (
-          select fecha_corte from {{ source('raw', 'sfc_lotes') }}
-          where kind = 'zero_rates'
-            and loaded_at > (select coalesce(max(_lote_loaded_at), '-infinity') from {{ this }})
-      )
+      and fecha_corte in ({{ cortes_a_reconstruir('zero_rates') }})
     {% endif %}
 )
 

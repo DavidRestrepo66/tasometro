@@ -204,3 +204,28 @@ def test_cli_requires_warehouse_dsn(
 
     assert exc.value.code == 2
     assert "WAREHOUSE_DSN is not set" in capsys.readouterr().err
+
+
+def test_batches_loaded_before_a_failure_stay_committed(tmp_path: Path, warehouse_dsn: str) -> None:
+    write(tmp_path, "run-a", 2, cut=date(2026, 10, 9))
+    write(tmp_path, "run-b", 2, cut=CUT)
+    manifest = next(tmp_path.rglob("fecha_corte=2026-10-16/**/*.manifest.json"))
+    data = json.loads(manifest.read_text())
+    data["rows_sha256"] = "0" * 64
+    manifest.write_text(json.dumps(data))
+
+    with pytest.raises(LoadError, match="hash mismatch"):
+        load_bronze(warehouse_dsn, tmp_path)
+
+    assert query(warehouse_dsn, "select count(*) from raw.sfc_lotes") == [(1,)]
+    assert query(warehouse_dsn, "select count(*) from raw.sfc_tasas") == [(2,)]
+
+
+def test_unreadable_parquet_raises_load_error(tmp_path: Path, warehouse_dsn: str) -> None:
+    write(tmp_path, "run-a", 2)
+    next(tmp_path.rglob("*.parquet")).write_bytes(b"not a parquet file")
+
+    with pytest.raises(LoadError, match="unreadable data file"):
+        load_bronze(warehouse_dsn, tmp_path)
+
+    assert query(warehouse_dsn, "select count(*) from raw.sfc_lotes") == [(0,)]

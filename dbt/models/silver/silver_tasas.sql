@@ -1,23 +1,21 @@
 {{
     config(
         materialized='incremental',
-        incremental_strategy='delete+insert',
-        unique_key='fecha_corte',
+        incremental_strategy='delete_insert_cortes',
+        lote_kind='rates',
+        rebuild_if_plazo_changed=true,
     )
 }}
 
 -- Typed source-aggregated rates of the latest extraction of each cut.
 -- Incremental runs rebuild every cut that received a batch since the last
--- build, so the weekly 8-week re-extraction is reprocessed whole.
+-- build (or every cut when the plazo_bandas seed changed), so the weekly
+-- 8-week re-extraction is reprocessed whole, even if it now yields no rows.
 with lotes as (
     select * from {{ ref('stg_sfc__lotes_vigentes') }}
     where kind = 'rates'
     {% if is_incremental() %}
-      and fecha_corte in (
-          select fecha_corte from {{ source('raw', 'sfc_lotes') }}
-          where kind = 'rates'
-            and loaded_at > (select coalesce(max(_lote_loaded_at), '-infinity') from {{ this }})
-      )
+      and fecha_corte in ({{ cortes_a_reconstruir('rates', rebuild_if_plazo_changed=true) }})
     {% endif %}
 ),
 
