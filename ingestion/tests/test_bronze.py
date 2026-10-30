@@ -133,3 +133,18 @@ def test_unsafe_run_ids_are_rejected(tmp_path: Path, run_id: str) -> None:
     with pytest.raises(ValueError, match="run_id"):
         write_batch(tmp_path, make_batch([rate_row()], run_id=run_id))
     assert list(tmp_path.rglob("*")) == []
+
+
+def test_failed_retry_never_leaves_a_manifest_for_replaced_data(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    first = write_batch(tmp_path, make_batch([rate_row()]))
+
+    def fail(self: pl.DataFrame, *args: object, **kwargs: object) -> None:
+        raise OSError("disk full")
+
+    monkeypatch.setattr(pl.DataFrame, "write_parquet", fail)
+    with pytest.raises(OSError, match="disk full"):
+        write_batch(tmp_path, make_batch([rate_row(), rate_row()]))
+
+    assert not first.manifest_path.exists()

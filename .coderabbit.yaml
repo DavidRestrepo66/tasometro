@@ -1,0 +1,118 @@
+# CodeRabbit configuration — https://docs.coderabbit.ai/reference/configuration
+# Applies to every PR whose head branch contains this file (feature branches included).
+language: "es"
+
+reviews:
+  # chill = balanced. Use "assertive" if you want every nit picked.
+  profile: "chill"
+
+  high_level_summary: true
+  high_level_summary_placeholder: "@coderabbitai summary"
+  review_status: true
+  review_details: false
+  collapse_walkthrough: true
+  changed_files_summary: true
+  estimate_code_review_effort: true
+  sequence_diagrams: false
+  poem: false
+
+  auto_review:
+    enabled: true
+    drafts: false
+    auto_incremental_review: true
+    # Review PRs stacked on feature branches, not only those targeting main.
+    base_branches:
+      - ".*"
+
+  # Never auto-approve: the human stays the one who approves and merges.
+  auto_approvals:
+    enabled: false
+
+  path_filters:
+    - "!dbt/target/**"
+    - "!dbt/logs/**"
+    - "!dbt/dbt_packages/**"
+    - "!data/**"
+    - "!ingestion/.venv/**"
+    - "!**/__pycache__/**"
+    - "!**/*.pyc"
+    - "!ingestion/uv.lock"
+
+  path_instructions:
+    - path: "ingestion/src/**"
+      instructions: |
+        - Python 3.12, ruff with line-length 100, typed function signatures.
+        - Ingestion must stay idempotent: bronze is keyed by source/fecha_corte/run_id and
+          a retry may only overwrite its own run_id, never another run's file.
+        - Bronze stores additive sums (sum_montos, sum_tasa_x_monto). Weighted averages are
+          computed downstream in dbt, never at the source.
+        - Secrets and API tokens come only from environment variables. Flag any hardcoded
+          credential, token or connection string.
+        - SoQL queries are built by pure functions in soql.py and must stay testable
+          without network access.
+    - path: "ingestion/tests/**"
+      instructions: |
+        - Tests must be deterministic. HTTP is mocked with respx; anything hitting
+          datos.gov.co must be marked `live` and stays deselected by default.
+        - Postgres tests require TASOMETRO_TEST_DSN and must skip cleanly when it is unset.
+        - Prefer asserting observable behavior (rows, sums, exit codes, persisted state)
+          over implementation details.
+    - path: "dbt/models/**"
+      instructions: |
+        - Silver keeps the latest extraction per (fecha_corte, entity, kind); incremental
+          filters must take kind into account, not only loaded_at.
+        - Every incremental model must produce the same result as --full-refresh.
+        - Declare dbt tests for grain uniqueness, not-null keys, accepted values and
+          relationships on every new model or column that joins another model.
+        - Spread is only meaningful for FS and DTF/DTFE/IBR/IB1/IB3/IB6/IBE rates. OTR must
+          be flagged and UVR/IPC excluded; flag any model that mixes them silently.
+    - path: "docker/**"
+      instructions: |
+        - Pin base images and Airflow to exact versions; never use `latest`.
+        - Files mounted into containers must be writable by the service user.
+        - Configuration comes only from the environment variables documented in .env.example.
+    - path: ".github/workflows/**"
+      instructions: |
+        - Pin every action to an exact version or commit SHA, never a floating major tag.
+        - CI must not require secrets; database tests run against a service container.
+    - path: "**/*.md"
+      instructions: |
+        - README and docs must never link to private files (docs/, odd/, .atl/), which are
+          excluded from the repository with .git/info/exclude.
+
+  pre_merge_checks:
+    title:
+      mode: "warning"
+      requirements: "Conventional Commits: type(scope): imperative summary, under 72 characters."
+    description:
+      mode: "warning"
+    docstrings:
+      mode: "off"
+
+  tools:
+    ruff:
+      enabled: true
+    hadolint:
+      enabled: true
+    actionlint:
+      enabled: true
+    gitleaks:
+      enabled: true
+    trufflehog:
+      enabled: true
+    dotenvLint:
+      enabled: true
+    yamllint:
+      enabled: true
+    markdownlint:
+      enabled: true
+    # Keep off until the first pass: they add noise on dbt/jinja and compose files.
+    sqlfluff:
+      enabled: false
+    checkov:
+      enabled: false
+    trivy:
+      enabled: false
+
+chat:
+  auto_reply: true
