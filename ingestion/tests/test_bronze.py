@@ -1,4 +1,5 @@
 import json
+import re
 from dataclasses import replace
 from datetime import date
 from pathlib import Path
@@ -85,6 +86,7 @@ def test_manifest_records_rows_hash_query_and_identity(tmp_path: Path) -> None:
     assert manifest["data_file"] == "rates_1-7.parquet"
     assert len(manifest["rows_sha256"]) == 64
     assert manifest["extracted_at"].endswith("+00:00")
+    assert re.fullmatch(r"\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d\.\d{6}\+00:00", manifest["extracted_at"])
 
 
 def test_rows_hash_ignores_row_order_but_not_values(tmp_path: Path) -> None:
@@ -133,3 +135,18 @@ def test_unsafe_run_ids_are_rejected(tmp_path: Path, run_id: str) -> None:
     with pytest.raises(ValueError, match="run_id"):
         write_batch(tmp_path, make_batch([rate_row()], run_id=run_id))
     assert list(tmp_path.rglob("*")) == []
+
+
+def test_failed_retry_never_leaves_a_manifest_for_replaced_data(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    first = write_batch(tmp_path, make_batch([rate_row()]))
+
+    def fail(self: pl.DataFrame, *args: object, **kwargs: object) -> None:
+        raise OSError("disk full")
+
+    monkeypatch.setattr(pl.DataFrame, "write_parquet", fail)
+    with pytest.raises(OSError, match="disk full"):
+        write_batch(tmp_path, make_batch([rate_row(), rate_row()]))
+
+    assert not first.manifest_path.exists()
