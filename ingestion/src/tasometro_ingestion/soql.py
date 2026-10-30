@@ -34,6 +34,17 @@ RATE_MEASURES: tuple[str, ...] = (
     "count(*) AS n_registros",
 )
 
+ZERO_RATE_MEASURE = "count(*) AS n_tasa_cero"
+
+
+def _alias(measure: str) -> str:
+    return measure.rsplit(" AS ", 1)[1]
+
+
+# Output columns of each query, used as the fixed bronze schema.
+RATE_COLUMNS: tuple[str, ...] = (*GROUP_COLUMNS, *(_alias(m) for m in RATE_MEASURES))
+ZERO_RATE_COLUMNS: tuple[str, ...] = (*GROUP_COLUMNS, _alias(ZERO_RATE_MEASURE))
+
 _DIGITS = re.compile(r"\d+")
 
 SoqlParams = dict[str, str]
@@ -89,7 +100,7 @@ def rates_query(fecha_corte: date, entity: EntityKey) -> SoqlParams:
 def zero_rate_query(fecha_corte: date, entity: EntityKey) -> SoqlParams:
     """Count of zero-rate rows on the same grain, used to monitor their share."""
     where = _entity_cut_filter(fecha_corte, entity) + " AND tasa_efectiva_promedio = 0"
-    select = ",".join(GROUP_COLUMNS) + ",count(*) AS n_tasa_cero"
+    select = ",".join((*GROUP_COLUMNS, ZERO_RATE_MEASURE))
     return _grouped(select, where, GROUP_COLUMNS)
 
 
