@@ -89,7 +89,8 @@ services:
       - -c
       - |
         mkdir -p /opt/tasometro/data/bronze
-        chown ${AIRFLOW_UID:-50000}:0 /opt/tasometro/data/bronze
+        # Recursive: partitions written earlier by the host user must be writable too.
+        chown -R ${AIRFLOW_UID:-50000}:0 /opt/tasometro/data/bronze
         exec /entrypoint airflow db migrate
     restart: "no"
 
