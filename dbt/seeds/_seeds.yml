@@ -1,0 +1,33 @@
+version: 2
+
+seeds:
+  - name: tpm_cambios
+    description: >
+      Banco de la República policy rate (SUAMECA series 59), one row per change
+      date. Effective annual, base 365. Updated by hand; see the README.
+    config:
+      column_types: {fecha_cambio: date, tpm: "numeric(6, 2)"}
+    columns:
+      - name: fecha_cambio
+        data_tests: [unique, not_null]
+      - name: tpm
+        data_tests:
+          - not_null
+          - valores_en_rango:
+              arguments: {min_value: 0, max_value: 50}
+
+  - name: plazo_bandas
+    description: >
+      Maps every raw plazo_de_cr_dito label to a canonical term band. A band
+      holds the label's upper bound; open-ended labels go by their lower bound.
+      es_aproximado marks labels that straddle two bands.
+    config:
+      column_types: {plazo_banda_orden: integer, es_aproximado: boolean}
+    columns:
+      - name: plazo_raw
+        data_tests: [unique, not_null]
+      - name: plazo_banda
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: ["Hasta 1 año", "1 a 3 años", "3 a 5 años", "Más de 5 años", "Sin plazo"]

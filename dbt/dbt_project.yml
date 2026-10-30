@@ -1,0 +1,27 @@
+name: tasometro
+version: "0.1.0"
+config-version: 2
+profile: tasometro
+
+model-paths: ["models"]
+seed-paths: ["seeds"]
+test-paths: ["tests"]
+macro-paths: ["macros"]
+clean-targets: ["target", "dbt_packages"]
+
+vars:
+  # Last day the TPM seed was checked against BanRep. A cut after this date
+  # fails the freshness test until the seed is reviewed and this is bumped.
+  tpm_revisado_hasta: "2026-10-28"
+
+models:
+  tasometro:
+    staging:
+      +schema: staging
+      +materialized: view
+    silver:
+      +schema: silver
+
+seeds:
+  tasometro:
+    +schema: seeds

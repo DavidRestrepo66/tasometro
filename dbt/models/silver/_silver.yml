@@ -1,0 +1,75 @@
+version: 2
+
+models:
+  - name: silver_tasas
+    description: >
+      Typed source-aggregated lending rates, latest extraction per cut. Grain:
+      cut x entity x person type x sex x company size x credit type x product
+      x raw term x rate type.
+    columns:
+      - name: tasa_id
+        data_tests: [unique, not_null]
+      - name: fecha_corte
+        data_tests: [not_null]
+      - name: tipo_entidad
+        data_tests: [not_null]
+      - name: codigo_entidad
+        data_tests: [not_null]
+      - name: tipo_credito
+        data_tests: [not_null]
+      - name: producto_credito
+        data_tests: [not_null]
+      - name: plazo_raw
+        description: Raw term label; a value missing from the plazo_bandas seed fails.
+        data_tests:
+          - relationships:
+              arguments:
+                to: ref('plazo_bandas')
+                field: plazo_raw
+      - name: plazo_banda
+        data_tests: [not_null]
+      - name: tipo_de_tasa
+        data_tests: [not_null]
+      - name: sum_montos
+        data_tests:
+          - not_null
+          - valores_en_rango:
+              arguments: {min_value: 0, max_value: 1e15}
+      - name: tasa_ponderada
+        description: Amount-weighted effective annual rate, in percent.
+        data_tests:
+          - valores_en_rango:
+              arguments: {min_value: 0, max_value: 100}
+      - name: tasa_minima
+        data_tests:
+          - valores_en_rango:
+              arguments: {min_value: 0, max_value: 100}
+      - name: tasa_maxima
+        data_tests:
+          - valores_en_rango:
+              arguments: {min_value: 0, max_value: 100}
+
+  - name: silver_tasas_cero
+    description: Zero-rate placeholder counts, same grain as silver_tasas.
+    columns:
+      - name: fecha_corte
+        data_tests: [not_null]
+      - name: n_tasa_cero
+        data_tests:
+          - not_null
+          - valores_en_rango:
+              arguments: {min_value: 1, max_value: 1e9}
+
+  - name: silver_entidades
+    description: SFC supervised-entity catalog.
+    columns:
+      - name: nit
+        data_tests: [not_null]
+
+  - name: silver_tpm_diaria
+    description: BanRep policy rate in force each day (effective annual, base 365).
+    columns:
+      - name: fecha
+        data_tests: [unique, not_null]
+      - name: tpm
+        data_tests: [not_null]
