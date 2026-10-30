@@ -95,11 +95,7 @@ class SocrataClient:
         The query must carry a deterministic ``$order`` (or be a grouped query
         returning a single page) for pagination to be stable.
         """
-        if not _DATASET_ID.fullmatch(dataset):
-            raise ValueError(f"invalid Socrata dataset id: {dataset!r}")
-        if _RESERVED & query.keys():
-            raise ValueError("$limit/$offset are managed by the client")
-
+        self._check(dataset, query)
         rows: list[Row] = []
         offset = 0
         while True:
@@ -109,6 +105,18 @@ class SocrataClient:
             if len(page) < self._page_size:
                 return rows
             offset += self._page_size
+
+    def fetch_first(self, dataset: str, query: Mapping[str, str]) -> Row | None:
+        """Return the first row of ``query``, or ``None`` when nothing matches."""
+        self._check(dataset, query)
+        page = self._get_page(f"/resource/{dataset}.json", {**query, "$limit": "1"})
+        return page[0] if page else None
+
+    def _check(self, dataset: str, query: Mapping[str, str]) -> None:
+        if not _DATASET_ID.fullmatch(dataset):
+            raise ValueError(f"invalid Socrata dataset id: {dataset!r}")
+        if _RESERVED & query.keys():
+            raise ValueError("$limit/$offset are managed by the client")
 
     def _get_page(self, path: str, params: Mapping[str, str]) -> list[Row]:
         retrying = Retrying(

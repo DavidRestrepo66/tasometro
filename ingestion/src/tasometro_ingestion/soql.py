@@ -116,3 +116,8 @@ def entities_query(fecha_corte: date) -> SoqlParams:
         "$where": f"fecha_corte = {soql_timestamp(fecha_corte)}",
         "$group": keys,
     }
+
+
+def cut_exists_query(fecha_corte: date) -> SoqlParams:
+    """Probe whether a dataset has published a cut; meant for a one-row fetch."""
+    return {"$select": "fecha_corte", "$where": f"fecha_corte = {soql_timestamp(fecha_corte)}"}
