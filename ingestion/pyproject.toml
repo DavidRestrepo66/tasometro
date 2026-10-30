@@ -11,6 +11,7 @@ requires-python = ">=3.12"
 dependencies = [
     "httpx>=0.28.1",
     "polars>=2.1.0",
+    "psycopg[binary]>=3.2",
     "tenacity>=9.2.1",
 ]
 
@@ -39,5 +40,6 @@ select = ["E", "F", "W", "I", "B", "UP", "SIM", "RUF", "PT"]
 testpaths = ["tests"]
 addopts = "-ra --strict-markers -m 'not live'"
 markers = [
+    "postgres: needs a Postgres server named by TASOMETRO_TEST_DSN (skipped when unset)",
     "live: hits the real datos.gov.co API (deselected by default; run with -m live)",
 ]
