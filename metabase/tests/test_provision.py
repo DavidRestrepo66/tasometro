@@ -252,3 +252,21 @@ def test_refresh_flag_pushes_the_warehouse_password_even_when_details_match():
     provision.provision(flagged)
 
     assert _bodies(put)[0]["details"]["password"] == "secret"
+
+
+@respx.mock
+def test_reconciling_the_connection_never_sends_an_ssl_setting(settings):
+    respx.get(f"{BASE}/api/session/properties").respond(json={"has-user-setup": True})
+    respx.post(f"{BASE}/api/session").respond(json={"id": "session-2"})
+    wrong = _database_listing(
+        details={"host": "elsewhere", "port": 5432, "dbname": "x", "user": "u"}
+    )
+    respx.get(f"{BASE}/api/database").respond(json=wrong)
+    put = respx.put(f"{BASE}/api/database/7").respond(json={"id": 7})
+    respx.get(f"{BASE}/api/dashboard").respond(json=[{"id": 3, "name": provision.DASHBOARD_NAME}])
+    respx.get(f"{BASE}/api/card").respond(json=_existing_cards())
+    respx.get(f"{BASE}/api/dashboard/3").respond(json=_complete_dashboard())
+
+    provision.provision(settings)
+
+    assert "ssl" not in _bodies(put)[0]["details"]

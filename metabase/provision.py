@@ -258,7 +258,7 @@ def _database_payload(settings: Settings) -> dict[str, Any]:
             "dbname": settings.dbname,
             "user": settings.user,
             "password": settings.password,
-            "ssl": False,
+            # No "ssl" key on purpose: updates must not reset a TLS setting configured in Metabase.
         },
     }
 
