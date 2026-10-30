@@ -4,6 +4,9 @@ Idempotent: the first run completes the Metabase setup (admin user), registers
 the warehouse connection, creates the four dashboard questions and the
 dashboard; later runs find them by name and change nothing.
 
+The script owns the dashboard named DASHBOARD_NAME: it repairs missing cards, filters and
+mappings, and manual edits to its filters or mappings are overwritten on re-run.
+
 Usage (with .env exported)::
 
     uv run --project ingestion python metabase/provision.py
