@@ -6,7 +6,7 @@ x-airflow-common: &airflow-common
     context: .
     dockerfile: docker/airflow/Dockerfile
   image: tasometro-airflow:local
-  user: "${AIRFLOW_UID:-50000}:0"
+  user: "${AIRFLOW_UID:?set AIRFLOW_UID to your host UID (id -u)}:0"
   environment: &airflow-env
     AIRFLOW__CORE__EXECUTOR: LocalExecutor
     AIRFLOW__CORE__LOAD_EXAMPLES: "false"
@@ -89,8 +89,9 @@ services:
       - -c
       - |
         mkdir -p /opt/tasometro/data/bronze
-        # Recursive: partitions written earlier by the host user must be writable too.
-        chown -R ${AIRFLOW_UID:-50000}:0 /opt/tasometro/data/bronze
+        # Owner is the host UID (AIRFLOW_UID), so the host user keeps write access for
+        # local ingestion. Recursive: partitions written earlier must stay writable too.
+        chown -R ${AIRFLOW_UID:?set AIRFLOW_UID to your host UID (id -u)}:0 /opt/tasometro/data/bronze
         exec /entrypoint airflow db migrate
     restart: "no"
 
