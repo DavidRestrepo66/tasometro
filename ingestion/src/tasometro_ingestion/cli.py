@@ -18,6 +18,7 @@ from datetime import date
 from pathlib import Path
 
 from tasometro_ingestion import __version__
+from tasometro_ingestion.bronze import validate_run_id
 from tasometro_ingestion.client import SocrataClient
 from tasometro_ingestion.ingest import SOURCES, ingest_cut
 from tasometro_ingestion.soql import EntityKey
@@ -25,6 +26,13 @@ from tasometro_ingestion.soql import EntityKey
 
 def make_client(app_token: str | None) -> SocrataClient:
     return SocrataClient(app_token=app_token)
+
+
+def _run_id(value: str) -> str:
+    try:
+        return validate_run_id(value)
+    except ValueError as exc:
+        raise argparse.ArgumentTypeError(str(exc)) from exc
 
 
 def _cut_date(value: str) -> date:
@@ -57,7 +65,9 @@ def build_parser() -> argparse.ArgumentParser:
     ingest = commands.add_parser("ingest", help="extract one cut into bronze")
     ingest.add_argument("--source", required=True, choices=SOURCES, help="Socrata dataset id")
     ingest.add_argument("--fecha-corte", required=True, type=_cut_date, help="cut date")
-    ingest.add_argument("--run-id", required=True, help="run identifier, used as a partition")
+    ingest.add_argument(
+        "--run-id", required=True, type=_run_id, help="run identifier, used as a partition"
+    )
     ingest.add_argument("--bronze-root", required=True, type=Path, help="bronze root directory")
     ingest.add_argument(
         "--entity",

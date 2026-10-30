@@ -65,11 +65,17 @@ def ingest_cut(
             report.failed.append(entity)
             continue
 
-        for kind, rows in results.items():
-            write_batch(
-                bronze_root,
-                BronzeBatch(source, fecha_corte, run_id, entity, kind, queries[kind], rows),
-            )
+        try:
+            for kind, rows in results.items():
+                write_batch(
+                    bronze_root,
+                    BronzeBatch(source, fecha_corte, run_id, entity, kind, queries[kind], rows),
+                )
+        except OSError:
+            # A batch without its manifest is incomplete and ignored by the loader.
+            log.exception("write failed for entity %s-%s", *_key(entity))
+            report.failed.append(entity)
+            continue
         report.entities += 1
         report.rate_rows += len(results[BatchKind.RATES])
         report.zero_rate_rows += len(results[BatchKind.ZERO_RATES])

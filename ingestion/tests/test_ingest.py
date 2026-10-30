@@ -174,6 +174,7 @@ def test_cli_passes_explicit_entities_and_app_token_from_env(
         (["--source", "abcd-1234"], "invalid choice"),
         (["--fecha-corte", "2026-13-01"], "invalid date"),
         (["--entity", "1;7"], "expected <tipo>-<codigo>"),
+        (["--run-id", "../x"], "unsafe run_id"),
     ],
 )
 def test_cli_rejects_invalid_arguments(
@@ -197,3 +198,26 @@ def test_cli_rejects_invalid_arguments(
     assert exc.value.code == 2
     assert message in capsys.readouterr().err
     assert list(tmp_path.rglob("*")) == []
+
+
+def test_write_failure_is_reported_per_entity_and_later_entities_still_land(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from tasometro_ingestion import ingest
+
+    real_write = ingest.write_batch
+
+    def flaky(root: Path, batch: object) -> object:
+        if batch.entity == EntityKey("1", "1"):  # type: ignore[attr-defined]
+            raise OSError("disk full")
+        return real_write(root, batch)  # type: ignore[arg-type]
+
+    monkeypatch.setattr(ingest, "write_batch", flaky)
+    client = FakeClient([("1", "1"), ("1", "7")])
+
+    report = ingest_cut(client, tmp_path, "qzsc-9esp", CUT, RUN_ID)
+
+    assert report.failed == [EntityKey("1", "1")]
+    assert report.entities == 1
+    names = sorted(p.name for p in tmp_path.rglob("*.manifest.json"))
+    assert names == ["rates_1-7.manifest.json", "zero_rates_1-7.manifest.json"]

@@ -67,10 +67,16 @@ class WrittenBatch:
     rows_sha256: str
 
 
+def validate_run_id(run_id: str) -> str:
+    """Return ``run_id`` if it is safe as a path component, else raise ValueError."""
+    if run_id in {".", ".."} or not _SAFE_RUN_ID.fullmatch(run_id):
+        raise ValueError(f"unsafe run_id for a path component: {run_id!r}")
+    return run_id
+
+
 def write_batch(root: Path, batch: BronzeBatch) -> WrittenBatch:
     """Write ``batch`` under ``root`` and return where it landed."""
-    if batch.run_id in {".", ".."} or not _SAFE_RUN_ID.fullmatch(batch.run_id):
-        raise ValueError(f"unsafe run_id for a path component: {batch.run_id!r}")
+    validate_run_id(batch.run_id)
 
     columns = _SCHEMAS[batch.kind]
     _check_columns(batch.rows, columns)
