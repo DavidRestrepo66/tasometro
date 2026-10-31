@@ -268,3 +268,25 @@ def test_schema_drift_in_one_batch_publishes_no_batch_of_the_entity(tmp_path: Pa
         "zero_rates_1-7.manifest.json",
         "zero_rates_1-7.parquet",
     ]
+
+
+def test_failure_on_the_second_batch_withdraws_the_first_one_of_the_entity(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from tasometro_ingestion import ingest
+    from tasometro_ingestion.bronze import BatchKind
+
+    real_write = ingest.write_batch
+
+    def flaky(root: Path, batch: object) -> object:
+        if batch.kind == BatchKind.ZERO_RATES:  # type: ignore[attr-defined]
+            raise OSError("disk full")
+        return real_write(root, batch)  # type: ignore[arg-type]
+
+    monkeypatch.setattr(ingest, "write_batch", flaky)
+    client = FakeClient([("1", "1")])
+
+    report = ingest_cut(client, tmp_path, "qzsc-9esp", CUT, RUN_ID)
+
+    assert report.failed == [EntityKey("1", "1")]
+    assert list(tmp_path.rglob("*.manifest.json")) == []

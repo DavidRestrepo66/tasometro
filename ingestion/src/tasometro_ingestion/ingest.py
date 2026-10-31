@@ -13,7 +13,13 @@ from datetime import date
 from pathlib import Path
 from typing import Any, Protocol
 
-from tasometro_ingestion.bronze import BatchKind, BronzeBatch, validate_rows, write_batch
+from tasometro_ingestion.bronze import (
+    BatchKind,
+    BronzeBatch,
+    WrittenBatch,
+    validate_rows,
+    write_batch,
+)
 from tasometro_ingestion.soql import EntityKey, entities_query, rates_query, zero_rate_query
 
 log = logging.getLogger(__name__)
@@ -65,18 +71,23 @@ def ingest_cut(
             report.failed.append(entity)
             continue
 
+        written: list[WrittenBatch] = []
         try:
             # Validate every batch before writing any, so schema drift in one
             # batch cannot leave the other one published.
             for kind, rows in results.items():
                 validate_rows(kind, rows)
             for kind, rows in results.items():
-                write_batch(
-                    bronze_root,
-                    BronzeBatch(source, fecha_corte, run_id, entity, kind, queries[kind], rows),
+                written.append(
+                    write_batch(
+                        bronze_root,
+                        BronzeBatch(source, fecha_corte, run_id, entity, kind, queries[kind], rows),
+                    )
                 )
         except (OSError, ValueError):
-            # A batch without its manifest is incomplete and ignored by the loader.
+            # Withdraw the batches already published so the entity lands as a pair or not at all.
+            for batch in written:
+                batch.manifest_path.unlink(missing_ok=True)
             log.exception("write failed for entity %s-%s", *_key(entity))
             report.failed.append(entity)
             continue

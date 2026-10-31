@@ -137,7 +137,7 @@ def test_unsafe_run_ids_are_rejected(tmp_path: Path, run_id: str) -> None:
     assert list(tmp_path.rglob("*")) == []
 
 
-def test_failed_retry_never_leaves_a_manifest_for_replaced_data(
+def test_failed_retry_keeps_the_previous_batch_intact(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     first = write_batch(tmp_path, make_batch([rate_row()]))
@@ -149,4 +149,6 @@ def test_failed_retry_never_leaves_a_manifest_for_replaced_data(
     with pytest.raises(OSError, match="disk full"):
         write_batch(tmp_path, make_batch([rate_row(), rate_row()]))
 
-    assert not first.manifest_path.exists()
+    assert first.manifest_path.exists()
+    assert pl.read_parquet(first.data_path).height == 1
+    assert not [p for p in tmp_path.rglob("*") if p.name.startswith(".")]
