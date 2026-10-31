@@ -23,7 +23,7 @@ Metabase · Docker Compose · GitHub Actions.
 ## Key decisions
 
 - **Aggregate at the source.** Each cut has about 900k rows; SoQL returns the sums needed to rebuild amount-weighted rates, about 1,250 rows per week.
-- **One query per cut and entity.** Small requests that retry independently and map to Airflow tasks.
+- **Two queries per cut and entity.** `rates_query` and `zero_rate_query` are small requests that retry independently and map to Airflow tasks.
 - **Idempotent bronze.** Batches are written under `source=/fecha_corte=/run_id=` with a manifest; a retry overwrites only its own run.
 - **Spread against the weekly TPM.** The policy rate is averaged over the seven days of the cut, and weeks with a rate change are flagged.
 - **Revision audit.** Banks revise recent weeks, so the last eight cuts are re-extracted and an audit model warns when published numbers changed.
@@ -46,7 +46,7 @@ docker compose up -d --build
 
 The Airflow DAG `tasometro_semanal` is created paused. A manual run extracts
 one cut and the seven before it, loads them and runs `dbt build`. Unpausing it
-starts a catch-up from 2022-07, the full history (about 214 weekly cuts).
+starts a catch-up from 2022-07, the full history (about 223 weekly positions; the number of published cuts depends on the dataset).
 The stack is for local use: every Airflow user is an admin.
 
 Build the dashboard once the warehouse has data:
