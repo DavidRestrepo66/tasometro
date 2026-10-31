@@ -91,6 +91,8 @@ cd ../dbt && uv run dbt build --profiles-dir .
 - A rate of 0 is treated as missing. UVR and IPC rates are excluded from the spread. Fixed and DTF/IBR-indexed rates enter it; a few ambiguous classes (`-DTF`, `LIB3`, `OTR`, `CEC$`) also enter and are flagged.
 - Sex is reported only for natural persons, and rates are source averages, so differences are descriptive, not causal.
 - Company-size comparisons cover legal entities (`Jurídica`) only; they do not describe all borrowers.
+- Incremental models pick up batches whose `loaded_at` is newer than the last one processed. The DAG runs with `max_active_runs=1`, so loads and `dbt build` do not overlap; running `tasometro-ingestion load` by hand while dbt is building can skip a batch until the next full refresh.
+- `metabase/provision.py` owns the dashboard it creates: manual edits to its filters or mappings are overwritten on re-run. To push a rotated warehouse password to Metabase, run it once with `METABASE_REFRESH_DATABASE=1`.
 
 ## Repository layout
 
