@@ -24,7 +24,7 @@ jobs:
     env:
       TASOMETRO_TEST_DSN: postgresql://postgres:postgres@localhost:5432/warehouse
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - uses: astral-sh/setup-uv@v10.3.3
       - name: Lint and format
         working-directory: ingestion
@@ -60,7 +60,7 @@ jobs:
       WAREHOUSE_PASSWORD: postgres
       WAREHOUSE_DB: warehouse
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - uses: astral-sh/setup-uv@v10.3.3
       - name: Load the two-cut fixture into raw
         run: dbt/ci/load_fixture.sh
