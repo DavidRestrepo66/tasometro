@@ -98,10 +98,6 @@ def write_batch(root: Path, batch: BronzeBatch) -> WrittenBatch:
     data_path = directory / f"{stem}.parquet"
     manifest_path = directory / f"{stem}.manifest.json"
 
-    # Withdraw the previous manifest first: while the data file is replaced, a
-    # manifest must never describe data it no longer matches.
-    manifest_path.unlink(missing_ok=True)
-    _atomic_write(data_path, lambda tmp: frame.write_parquet(tmp))
     manifest = {
         "source": batch.source,
         "fecha_corte": batch.fecha_corte.isoformat(),
@@ -117,7 +113,19 @@ def write_batch(root: Path, batch: BronzeBatch) -> WrittenBatch:
         "ingestion_version": __version__,
     }
     payload = json.dumps(manifest, ensure_ascii=False, indent=2) + "\n"
-    _atomic_write(manifest_path, lambda tmp: tmp.write_text(payload, encoding="utf-8"))
+
+    # Stage both files first: a failure while writing leaves the previous batch
+    # untouched. Only the two renames remain, data first and manifest last.
+    data_tmp = _tmp_name(data_path)
+    manifest_tmp = _tmp_name(manifest_path)
+    try:
+        frame.write_parquet(data_tmp)
+        manifest_tmp.write_text(payload, encoding="utf-8")
+        os.replace(data_tmp, data_path)
+        os.replace(manifest_tmp, manifest_path)
+    finally:
+        data_tmp.unlink(missing_ok=True)
+        manifest_tmp.unlink(missing_ok=True)
 
     return WrittenBatch(data_path, manifest_path, frame.height, rows_sha256)
 
@@ -141,10 +149,5 @@ def rows_hash(frame: pl.DataFrame) -> str:
     return hashlib.sha256("\n".join(lines).encode()).hexdigest()
 
 
-def _atomic_write(target: Path, write: Any) -> None:
-    tmp = target.with_name(f".{target.name}.tmp")
-    try:
-        write(tmp)
-        os.replace(tmp, target)
-    finally:
-        tmp.unlink(missing_ok=True)
+def _tmp_name(target: Path) -> Path:
+    return target.with_name(f".{target.name}.tmp")
