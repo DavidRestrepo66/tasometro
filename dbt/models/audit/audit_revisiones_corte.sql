@@ -35,6 +35,7 @@ extracciones as (
         and t.run_id = l.run_id
         and t.tipo_entidad = l.tipo_entidad
         and t.codigo_entidad = l.codigo_entidad
+        and l.kind = 'rates'
 ),
 
 comparadas as (
@@ -48,12 +49,13 @@ comparadas as (
         lag(sum_creditos) over serie as sum_creditos_anterior
     from extracciones
     window serie as (
-        partition by fecha_corte, tipo_entidad, codigo_entidad, kind
+        partition by source, fecha_corte, tipo_entidad, codigo_entidad, kind
         order by extracted_at, run_id
     )
 )
 
 select
+    source,
     fecha_corte,
     tipo_entidad,
     codigo_entidad,

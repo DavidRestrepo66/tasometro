@@ -7,6 +7,8 @@ models:
       extraction before it. hubo_revision is true when the source published
       different content for a cut already loaded.
     columns:
+      - name: source
+        data_tests: [not_null]
       - name: fecha_corte
         data_tests: [not_null]
       - name: run_id
