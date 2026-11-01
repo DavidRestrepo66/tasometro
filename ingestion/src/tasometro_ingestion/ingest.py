@@ -16,7 +16,8 @@ from typing import Any, Protocol
 from tasometro_ingestion.bronze import (
     BatchKind,
     BronzeBatch,
-    WrittenBatch,
+    Snapshot,
+    batch_paths,
     validate_rows,
     write_batch,
 )
@@ -71,23 +72,21 @@ def ingest_cut(
             report.failed.append(entity)
             continue
 
-        written: list[WrittenBatch] = []
+        batches = [
+            BronzeBatch(source, fecha_corte, run_id, entity, kind, queries[kind], rows)
+            for kind, rows in results.items()
+        ]
+        snapshot = Snapshot.take([p for b in batches for p in batch_paths(bronze_root, b)])
         try:
             # Validate every batch before writing any, so schema drift in one
             # batch cannot leave the other one published.
             for kind, rows in results.items():
                 validate_rows(kind, rows)
-            for kind, rows in results.items():
-                written.append(
-                    write_batch(
-                        bronze_root,
-                        BronzeBatch(source, fecha_corte, run_id, entity, kind, queries[kind], rows),
-                    )
-                )
+            for batch in batches:
+                write_batch(bronze_root, batch)
         except (OSError, ValueError):
-            # Withdraw the batches already published so the entity lands as a pair or not at all.
-            for batch in written:
-                batch.manifest_path.unlink(missing_ok=True)
+            # Put back what the entity had before this attempt, so it lands as a pair or not at all.
+            snapshot.restore()
             log.exception("write failed for entity %s-%s", *_key(entity))
             report.failed.append(entity)
             continue

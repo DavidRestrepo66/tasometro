@@ -290,3 +290,30 @@ def test_failure_on_the_second_batch_withdraws_the_first_one_of_the_entity(
 
     assert report.failed == [EntityKey("1", "1")]
     assert list(tmp_path.rglob("*.manifest.json")) == []
+
+
+def test_failure_on_the_second_batch_of_a_retry_restores_the_published_pair(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from tasometro_ingestion import ingest
+    from tasometro_ingestion.bronze import BatchKind
+
+    client = FakeClient([("1", "1")])
+    ingest_cut(client, tmp_path, "qzsc-9esp", CUT, RUN_ID)
+    files = sorted(p for p in tmp_path.rglob("*") if p.is_file())
+    before = {p: p.read_bytes() for p in files}
+    assert len(files) == 4
+
+    real_write = ingest.write_batch
+
+    def flaky(root: Path, batch: object) -> object:
+        if batch.kind == BatchKind.ZERO_RATES:  # type: ignore[attr-defined]
+            raise OSError("disk full")
+        return real_write(root, batch)  # type: ignore[arg-type]
+
+    monkeypatch.setattr(ingest, "write_batch", flaky)
+    report = ingest_cut(client, tmp_path, "qzsc-9esp", CUT, RUN_ID)
+
+    assert report.failed == [EntityKey("1", "1")]
+    after = {p: p.read_bytes() for p in sorted(p for p in tmp_path.rglob("*") if p.is_file())}
+    assert after == before
