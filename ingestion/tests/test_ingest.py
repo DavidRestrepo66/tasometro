@@ -338,3 +338,20 @@ def test_unreadable_previous_file_fails_only_its_entity(
     assert report.failed == [EntityKey("1", "1")]
     assert report.entities == 1
     assert list(tmp_path.rglob("*2.manifest.json"))
+
+
+@pytest.mark.parametrize("run_id", ["..", "a/b", ""])
+def test_unsafe_run_id_is_rejected_before_any_path_is_touched(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, run_id: str
+) -> None:
+    def forbidden(*args: object, **kwargs: object) -> None:
+        raise AssertionError("path touched before run_id validation")
+
+    monkeypatch.setattr(Path, "read_bytes", forbidden)
+    client = FakeClient([("1", "1")])
+
+    with pytest.raises(ValueError, match="run_id"):
+        ingest_cut(client, tmp_path, "qzsc-9esp", CUT, run_id)
+
+    assert client.calls == []
+    assert list(tmp_path.rglob("*")) == []

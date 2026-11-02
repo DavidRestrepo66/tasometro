@@ -19,6 +19,7 @@ from tasometro_ingestion.bronze import (
     Snapshot,
     batch_paths,
     validate_rows,
+    validate_run_id,
     write_batch,
 )
 from tasometro_ingestion.soql import EntityKey, entities_query, rates_query, zero_rate_query
@@ -56,6 +57,7 @@ def ingest_cut(
     entities: Sequence[EntityKey] | None = None,
 ) -> IngestReport:
     """Extract every entity of a cut into bronze and summarize the outcome."""
+    validate_run_id(run_id)
     if entities is None:
         entities = discover_entities(client, source, fecha_corte)
 
