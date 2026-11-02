@@ -1,4 +1,5 @@
 import json
+import os
 import re
 from dataclasses import replace
 from datetime import date
@@ -137,7 +138,7 @@ def test_unsafe_run_ids_are_rejected(tmp_path: Path, run_id: str) -> None:
     assert list(tmp_path.rglob("*")) == []
 
 
-def test_failed_retry_never_leaves_a_manifest_for_replaced_data(
+def test_failed_retry_keeps_the_previous_batch_intact(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     first = write_batch(tmp_path, make_batch([rate_row()]))
@@ -149,4 +150,65 @@ def test_failed_retry_never_leaves_a_manifest_for_replaced_data(
     with pytest.raises(OSError, match="disk full"):
         write_batch(tmp_path, make_batch([rate_row(), rate_row()]))
 
-    assert not first.manifest_path.exists()
+    assert first.manifest_path.exists()
+    assert pl.read_parquet(first.data_path).height == 1
+    assert not [p for p in tmp_path.rglob("*") if p.name.startswith(".")]
+
+
+def test_failure_publishing_the_manifest_restores_the_previous_batch(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    first = write_batch(tmp_path, make_batch([rate_row()]))
+    data_before = first.data_path.read_bytes()
+    manifest_before = first.manifest_path.read_bytes()
+
+    real_replace = os.replace
+
+    def fail_on_manifest(src: object, dst: object) -> None:
+        if str(dst).endswith(".manifest.json"):
+            raise OSError("disk full")
+        real_replace(src, dst)  # type: ignore[arg-type]
+
+    monkeypatch.setattr("tasometro_ingestion.bronze.os.replace", fail_on_manifest)
+    with pytest.raises(OSError, match="disk full"):
+        write_batch(tmp_path, make_batch([rate_row(), rate_row()]))
+
+    assert first.data_path.read_bytes() == data_before
+    assert first.manifest_path.read_bytes() == manifest_before
+    assert not [p for p in tmp_path.rglob("*") if p.name.startswith(".")]
+
+
+def test_failure_publishing_a_first_batch_leaves_nothing_behind(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    real_replace = os.replace
+
+    def fail_on_manifest(src: object, dst: object) -> None:
+        if str(dst).endswith(".manifest.json"):
+            raise OSError("disk full")
+        real_replace(src, dst)  # type: ignore[arg-type]
+
+    monkeypatch.setattr("tasometro_ingestion.bronze.os.replace", fail_on_manifest)
+    with pytest.raises(OSError, match="disk full"):
+        write_batch(tmp_path, make_batch([rate_row()]))
+
+    assert [p for p in tmp_path.rglob("*") if p.is_file()] == []
+
+
+def test_each_write_stages_through_its_own_temporary_names(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    real_replace = os.replace
+    staged: list[str] = []
+
+    def record(src: object, dst: object) -> None:
+        staged.append(Path(str(src)).name)
+        real_replace(src, dst)  # type: ignore[arg-type]
+
+    monkeypatch.setattr("tasometro_ingestion.bronze.os.replace", record)
+    write_batch(tmp_path, make_batch([rate_row()]))
+    first_run = set(staged)
+    staged.clear()
+    write_batch(tmp_path, make_batch([rate_row()]))
+
+    assert first_run.isdisjoint(staged)

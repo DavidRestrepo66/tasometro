@@ -268,3 +268,90 @@ def test_schema_drift_in_one_batch_publishes_no_batch_of_the_entity(tmp_path: Pa
         "zero_rates_1-7.manifest.json",
         "zero_rates_1-7.parquet",
     ]
+
+
+def test_failure_on_the_second_batch_withdraws_the_first_one_of_the_entity(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from tasometro_ingestion import ingest
+    from tasometro_ingestion.bronze import BatchKind
+
+    real_write = ingest.write_batch
+
+    def flaky(root: Path, batch: object) -> object:
+        if batch.kind == BatchKind.ZERO_RATES:  # type: ignore[attr-defined]
+            raise OSError("disk full")
+        return real_write(root, batch)  # type: ignore[arg-type]
+
+    monkeypatch.setattr(ingest, "write_batch", flaky)
+    client = FakeClient([("1", "1")])
+
+    report = ingest_cut(client, tmp_path, "qzsc-9esp", CUT, RUN_ID)
+
+    assert report.failed == [EntityKey("1", "1")]
+    assert list(tmp_path.rglob("*.manifest.json")) == []
+
+
+def test_failure_on_the_second_batch_of_a_retry_restores_the_published_pair(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from tasometro_ingestion import ingest
+    from tasometro_ingestion.bronze import BatchKind
+
+    client = FakeClient([("1", "1")])
+    ingest_cut(client, tmp_path, "qzsc-9esp", CUT, RUN_ID)
+    files = sorted(p for p in tmp_path.rglob("*") if p.is_file())
+    before = {p: p.read_bytes() for p in files}
+    assert len(files) == 4
+
+    real_write = ingest.write_batch
+
+    def flaky(root: Path, batch: object) -> object:
+        if batch.kind == BatchKind.ZERO_RATES:  # type: ignore[attr-defined]
+            raise OSError("disk full")
+        return real_write(root, batch)  # type: ignore[arg-type]
+
+    monkeypatch.setattr(ingest, "write_batch", flaky)
+    report = ingest_cut(client, tmp_path, "qzsc-9esp", CUT, RUN_ID)
+
+    assert report.failed == [EntityKey("1", "1")]
+    after = {p: p.read_bytes() for p in sorted(p for p in tmp_path.rglob("*") if p.is_file())}
+    assert after == before
+
+
+def test_unreadable_previous_file_fails_only_its_entity(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    client = FakeClient([("1", "1"), ("1", "2")])
+    ingest_cut(client, tmp_path, "qzsc-9esp", CUT, RUN_ID, entities=[EntityKey("1", "1")])
+
+    real_read = Path.read_bytes
+
+    def flaky(self: Path) -> bytes:
+        if "-1.parquet" in self.name or "-1.manifest" in self.name:
+            raise PermissionError("denied")
+        return real_read(self)
+
+    monkeypatch.setattr(Path, "read_bytes", flaky)
+    report = ingest_cut(client, tmp_path, "qzsc-9esp", CUT, RUN_ID)
+
+    assert report.failed == [EntityKey("1", "1")]
+    assert report.entities == 1
+    assert list(tmp_path.rglob("*2.manifest.json"))
+
+
+@pytest.mark.parametrize("run_id", ["..", "a/b", ""])
+def test_unsafe_run_id_is_rejected_before_any_path_is_touched(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, run_id: str
+) -> None:
+    def forbidden(*args: object, **kwargs: object) -> None:
+        raise AssertionError("path touched before run_id validation")
+
+    monkeypatch.setattr(Path, "read_bytes", forbidden)
+    client = FakeClient([("1", "1")])
+
+    with pytest.raises(ValueError, match="run_id"):
+        ingest_cut(client, tmp_path, "qzsc-9esp", CUT, run_id)
+
+    assert client.calls == []
+    assert list(tmp_path.rglob("*")) == []
