@@ -88,7 +88,7 @@ cd ../dbt && uv run dbt build --profiles-dir .
 | TPM seed | `dbt/seeds/tpm_cambios.csv`, one row per BanRep rate change |
 
 - The TPM is a **manually maintained seed**. A freshness test fails when a cut is newer than the date set in `tpm_revisado_hasta`; review the seed against BanRep and bump that variable.
-- The history dataset (`w9zh-vetq`) reports `tipo_de_tasa = 'N/A'` for every row. Those rates are kept as class `Desconocida`: they appear in the weekly ranking (`tasa_desconocida = true`) but get no spread against the TPM and are left out of the sex-gap mart.
+- The history dataset (`w9zh-vetq`) reports `tipo_de_tasa = 'N/A'` for every row. Those rates are kept as class `Desconocida`: they appear in the weekly ranking (`tasa_desconocida = true`) but get no spread against the TPM and are left out of the sex-gap mart. Cuts of `w9zh-vetq` loaded before this treatment are empty, and the weekly `plan_cuts` runs do not extract them again: re-run `ingest` for each such cut with a new `--run-id`, then `load` and `dbt build`, as in *Running pieces by hand*; the latest extraction of a cut wins.
 - A rate of 0 is treated as missing. UVR and IPC rates are excluded from the spread. Fixed and DTF/IBR-indexed rates enter it; a few ambiguous classes (`-DTF`, `LIB3`, `OTR`, `CEC$`) also enter and are flagged.
 - Sex is reported only for natural persons, and rates are source averages, so differences are descriptive, not causal.
 - Company-size comparisons cover legal entities (`Jurídica`) only; they do not describe all borrowers.
