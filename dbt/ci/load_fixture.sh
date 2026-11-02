@@ -15,3 +15,8 @@ with psycopg.connect('') as conn:
 for table in sfc_lotes sfc_tasas sfc_tasas_cero sfc_entidades; do
   psql -v ON_ERROR_STOP=1 -c "\\copy raw.$table from 'dbt/ci/fixture/$table.csv' with csv header"
 done
+
+# One history-dataset cut (w9zh-vetq) whose rows all have tipo_de_tasa 'N/A'.
+for table in sfc_lotes sfc_tasas; do
+  psql -v ON_ERROR_STOP=1 -c "\\copy raw.$table from 'dbt/ci/fixture/${table}_historico.csv' with csv header"
+done

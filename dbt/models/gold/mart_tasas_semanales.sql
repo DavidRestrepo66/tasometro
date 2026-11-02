@@ -1,6 +1,7 @@
 -- Weekly rate of each bank per credit type, product and term band, against the
--- policy rate. Only rate types comparable with the TPM enter (en_spread);
--- segments are summed. The weighted rate is recomputed from additive sums.
+-- policy rate. Only rate types comparable with the TPM get a spread (en_spread);
+-- rates of unknown type (history dataset) enter the ranking with a null spread.
+-- Segments are summed. The weighted rate is recomputed from additive sums.
 with base as (
     select
         f.fecha_corte,
@@ -9,14 +10,15 @@ with base as (
         p.producto_credito,
         p.plazo_banda,
         p.plazo_banda_orden,
+        (p.clase_tasa = 'Desconocida') as tasa_desconocida,
         sum(f.sum_montos) as sum_montos,
         sum(f.sum_creditos) as sum_creditos,
         sum(f.sum_tasa_x_monto) as sum_tasa_x_monto,
         bool_or(p.tasa_es_ambigua) as incluye_tasa_ambigua
     from {{ ref('fact_tasas') }} as f
     inner join {{ ref('dim_producto') }} as p on p.producto_key = f.producto_key
-    where p.en_spread
-    group by 1, 2, 3, 4, 5, 6
+    where p.en_spread or p.clase_tasa = 'Desconocida'
+    group by 1, 2, 3, 4, 5, 6, 7
 ),
 
 tasas as (
@@ -26,7 +28,7 @@ tasas as (
         sum(b.sum_tasa_x_monto) over mercado
             / nullif(sum(b.sum_montos) over mercado, 0) as tasa_mercado
     from base as b
-    window mercado as (partition by b.fecha_corte, b.tipo_credito, b.producto_credito, b.plazo_banda)
+    window mercado as (partition by b.fecha_corte, b.tipo_credito, b.producto_credito, b.plazo_banda, b.tasa_desconocida)
 ),
 
 con_tpm as (
@@ -39,7 +41,7 @@ con_tpm as (
     from tasas as t
     inner join {{ ref('dim_fecha') }} as d on d.fecha_corte = t.fecha_corte
     window serie as (
-        partition by t.entidad_key, t.tipo_credito, t.producto_credito, t.plazo_banda
+        partition by t.entidad_key, t.tipo_credito, t.producto_credito, t.plazo_banda, t.tasa_desconocida
         order by t.fecha_corte
     )
 )
@@ -51,12 +53,13 @@ select
     producto_credito,
     plazo_banda,
     plazo_banda_orden,
+    tasa_desconocida,
     sum_montos,
     sum_creditos,
     sum_tasa_x_monto,
     round(tasa_ponderada, 4) as tasa_ponderada,
     tpm_semana,
-    round(tasa_ponderada - tpm_semana, 4) as spread,
+    case when not tasa_desconocida then round(tasa_ponderada - tpm_semana, 4) end as spread,
     -- Change against the previous week only; a gap in the series gives null.
     case when fecha_corte_anterior = fecha_corte - 7
         then round(tasa_ponderada - tasa_ponderada_anterior, 4)

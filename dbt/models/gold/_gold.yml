@@ -78,7 +78,11 @@ models:
             columns: [fecha_corte, entidad_key, tipo_credito, producto_credito, plazo_banda]
     columns:
       - name: spread
-        description: tasa_ponderada - tpm_semana, in percentage points.
+        description: >
+          tasa_ponderada - tpm_semana, in percentage points. Null for rates of
+          unknown type, which are not comparable with the TPM.
+      - name: tasa_desconocida
+        description: True when the rate type is 'N/A' (history dataset).
         data_tests: [not_null]
       - name: desvio_mercado
         description: >

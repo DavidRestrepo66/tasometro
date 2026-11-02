@@ -35,7 +35,8 @@ seeds:
   - name: tipo_tasa_clases
     description: >
       Classifies every tipo_de_tasa. Only en_spread rates are compared with the
-      TPM; real rates (UVR, IPC) are not. es_ambigua marks types whose meaning
+      TPM; real rates (UVR, IPC) are not, and neither are unknown ones ('N/A',
+      reported by the history dataset), which only enter the ranking. es_ambigua marks types whose meaning
       the source does not define; they enter the spread but are flagged.
     config:
       column_types: {en_spread: boolean, es_ambigua: boolean}
@@ -46,4 +47,4 @@ seeds:
         data_tests:
           - accepted_values:
               arguments:
-                values: ["Fija", "Indexada", "Otra", "Real"]
+                values: ["Fija", "Indexada", "Otra", "Real", "Desconocida"]

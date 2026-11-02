@@ -1,10 +1,10 @@
--- The weekly mart keeps every peso of spread-eligible rates: per cut, its
--- disbursed amount equals the fact's for rate types with en_spread.
+-- The weekly mart keeps every peso of spread-eligible and unknown-type rates:
+-- per cut, its disbursed amount equals the fact's for those rate types.
 with fact as (
     select f.fecha_corte, sum(f.sum_montos) as montos
     from {{ ref('fact_tasas') }} as f
     inner join {{ ref('dim_producto') }} as p on p.producto_key = f.producto_key
-    where p.en_spread
+    where p.en_spread or p.clase_tasa = 'Desconocida'
     group by 1
 ),
 
