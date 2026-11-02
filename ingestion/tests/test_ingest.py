@@ -317,3 +317,24 @@ def test_failure_on_the_second_batch_of_a_retry_restores_the_published_pair(
     assert report.failed == [EntityKey("1", "1")]
     after = {p: p.read_bytes() for p in sorted(p for p in tmp_path.rglob("*") if p.is_file())}
     assert after == before
+
+
+def test_unreadable_previous_file_fails_only_its_entity(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    client = FakeClient([("1", "1"), ("1", "2")])
+    ingest_cut(client, tmp_path, "qzsc-9esp", CUT, RUN_ID, entities=[EntityKey("1", "1")])
+
+    real_read = Path.read_bytes
+
+    def flaky(self: Path) -> bytes:
+        if "-1.parquet" in self.name or "-1.manifest" in self.name:
+            raise PermissionError("denied")
+        return real_read(self)
+
+    monkeypatch.setattr(Path, "read_bytes", flaky)
+    report = ingest_cut(client, tmp_path, "qzsc-9esp", CUT, RUN_ID)
+
+    assert report.failed == [EntityKey("1", "1")]
+    assert report.entities == 1
+    assert list(tmp_path.rglob("*2.manifest.json"))

@@ -76,8 +76,9 @@ def ingest_cut(
             BronzeBatch(source, fecha_corte, run_id, entity, kind, queries[kind], rows)
             for kind, rows in results.items()
         ]
-        snapshot = Snapshot.take([p for b in batches for p in batch_paths(bronze_root, b)])
+        snapshot: Snapshot | None = None
         try:
+            snapshot = Snapshot.take([p for b in batches for p in batch_paths(bronze_root, b)])
             # Validate every batch before writing any, so schema drift in one
             # batch cannot leave the other one published.
             for kind, rows in results.items():
@@ -86,7 +87,8 @@ def ingest_cut(
                 write_batch(bronze_root, batch)
         except (OSError, ValueError):
             # Put back what the entity had before this attempt, so it lands as a pair or not at all.
-            snapshot.restore()
+            if snapshot is not None:
+                snapshot.restore()
             log.exception("write failed for entity %s-%s", *_key(entity))
             report.failed.append(entity)
             continue
