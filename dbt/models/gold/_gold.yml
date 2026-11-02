@@ -9,7 +9,7 @@ models:
       - name: nombre_entidad
         data_tests: [not_null]
       - name: nit
-        description: Null only if the entity is missing from the catalog, which a silver test already fails.
+        description: Null only for entities that left the SFC catalog (history dataset).
 
   - name: dim_fecha
     description: One row per weekly cut, with the week's average TPM.
