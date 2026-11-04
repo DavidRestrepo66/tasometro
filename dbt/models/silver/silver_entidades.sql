@@ -2,7 +2,7 @@
 
 -- SFC supervised entities, keyed by (tipo_entidad, codigo_entidad). The catalog
 -- only lists current entities, so entities that reported rates in the past and
--- have left it are added from the rates themselves (latest name, no NIT) and
+-- are absent from it are added from the rates themselves (latest name, no NIT) and
 -- flagged with en_catalogo = false.
 with catalogo as (
     select

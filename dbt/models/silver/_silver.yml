@@ -69,7 +69,7 @@ models:
   - name: silver_entidades
     description: >
       SFC supervised-entity catalog, plus entities that reported rates in the
-      past and are no longer in it (en_catalogo = false, no NIT).
+      past and are absent from it (en_catalogo = false, no NIT).
     columns:
       - name: en_catalogo
         data_tests: [not_null]
