@@ -67,10 +67,18 @@ models:
               arguments: {min_value: 1, max_value: 1e9}
 
   - name: silver_entidades
-    description: SFC supervised-entity catalog.
+    description: >
+      SFC supervised-entity catalog, plus entities that reported rates in the
+      past and are absent from it (en_catalogo = false, no NIT).
     columns:
-      - name: nit
+      - name: en_catalogo
         data_tests: [not_null]
+      - name: nit
+        description: Null only for entities outside the current catalog.
+        data_tests:
+          - not_null:
+              config:
+                where: en_catalogo
 
   - name: silver_tpm_diaria
     description: BanRep policy rate in force each day (effective annual, base 365).

@@ -355,3 +355,17 @@ def test_unsafe_run_id_is_rejected_before_any_path_is_touched(
 
     assert client.calls == []
     assert list(tmp_path.rglob("*")) == []
+
+
+@pytest.mark.parametrize(("source", "drops_untyped"), [("qzsc-9esp", True), ("w9zh-vetq", False)])
+def test_only_the_history_source_keeps_rows_without_a_rate_type(
+    tmp_path: Path, source: str, drops_untyped: bool
+) -> None:
+    client = FakeClient([("1", "1")])
+
+    ingest_cut(client, tmp_path, source, CUT, RUN_ID, entities=[EntityKey("1", "1")])
+
+    rates_where = next(
+        q["$where"] for _, q in client.calls if "tasa_efectiva_promedio > 0" in q["$where"]
+    )
+    assert ("tipo_de_tasa != 'N/A'" in rates_where) is drops_untyped

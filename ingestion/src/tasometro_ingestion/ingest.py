@@ -22,6 +22,7 @@ from tasometro_ingestion.bronze import (
     validate_run_id,
     write_batch,
 )
+from tasometro_ingestion.plan import HISTORY_SOURCE
 from tasometro_ingestion.soql import EntityKey, entities_query, rates_query, zero_rate_query
 
 log = logging.getLogger(__name__)
@@ -64,7 +65,9 @@ def ingest_cut(
     report = IngestReport()
     for entity in entities:
         queries = {
-            BatchKind.RATES: rates_query(fecha_corte, entity),
+            BatchKind.RATES: rates_query(
+                fecha_corte, entity, require_rate_type=source != HISTORY_SOURCE
+            ),
             BatchKind.ZERO_RATES: zero_rate_query(fecha_corte, entity),
         }
         try:

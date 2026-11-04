@@ -64,7 +64,7 @@ CARDS: tuple[CardSpec, ...] = (
   max(m.tpm_semana) as tpm
 from gold.mart_tasas_semanales as m
 inner join gold.dim_entidad as e on e.entidad_key = m.entidad_key
-where true
+where not m.tasa_desconocida
   {_where("m", "tipo_credito", "plazo_banda", "desde", "entidad")}
 group by 1
 order by 1""",
@@ -82,7 +82,10 @@ order by 1""",
   max(m.semana_con_cambio_tpm::int) = 1 as semana_con_cambio_tpm
 from gold.mart_tasas_semanales as m
 inner join gold.dim_entidad as e on e.entidad_key = m.entidad_key
-where m.fecha_corte = (select max(fecha_corte) from gold.mart_tasas_semanales)
+where not m.tasa_desconocida
+  and m.fecha_corte = (
+    select max(fecha_corte) from gold.mart_tasas_semanales where not tasa_desconocida
+  )
   {_where("m", "tipo_credito", "plazo_banda", "entidad")}
 group by 1, 2
 order by spread desc

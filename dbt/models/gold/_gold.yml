@@ -9,7 +9,7 @@ models:
       - name: nombre_entidad
         data_tests: [not_null]
       - name: nit
-        description: Null only if the entity is missing from the catalog, which a silver test already fails.
+        description: Null only for historical entities absent from the current SFC catalog.
 
   - name: dim_fecha
     description: One row per weekly cut, with the week's average TPM.
@@ -41,10 +41,11 @@ models:
       - name: segmento_key
         data_tests: [unique, not_null]
       - name: tipo_de_persona
+        description: "N/A appears in a few source rows (Fondo Nacional del Ahorro, 2024-10-18); they are kept and excluded from the sex and company-size analyses."
         data_tests:
           - accepted_values:
               arguments:
-                values: ["Natural", "Jurídica"]
+                values: ["Natural", "Jurídica", "N/A"]
 
   - name: fact_tasas
     description: Lending rates at the silver grain, keyed to the four dimensions.
@@ -78,7 +79,11 @@ models:
             columns: [fecha_corte, entidad_key, tipo_credito, producto_credito, plazo_banda]
     columns:
       - name: spread
-        description: tasa_ponderada - tpm_semana, in percentage points.
+        description: >
+          tasa_ponderada - tpm_semana, in percentage points. Null for rates of
+          unknown type, which are not comparable with the TPM.
+      - name: tasa_desconocida
+        description: True when the rate type is 'N/A' (history dataset).
         data_tests: [not_null]
       - name: desvio_mercado
         description: >
