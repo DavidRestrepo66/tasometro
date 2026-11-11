@@ -82,17 +82,19 @@ def _grouped(select: str, where: str, group_columns: tuple[str, ...]) -> SoqlPar
     return {"$select": select, "$where": where, "$group": grain, "$order": grain}
 
 
-def rates_query(fecha_corte: date, entity: EntityKey) -> SoqlParams:
+def rates_query(
+    fecha_corte: date, entity: EntityKey, *, require_rate_type: bool = True
+) -> SoqlParams:
     """Aggregated rates for one entity in one cut.
 
     Zero rates are placeholders, not rates, so they are excluded from both the
-    weighted numerator and its denominator. Rows without a rate type are dropped.
+    weighted numerator and its denominator. Rows without a rate type are dropped
+    unless ``require_rate_type`` is false: the history dataset reports 'N/A' for
+    every row, and those rows are kept so silver can classify them as unknown.
     """
-    where = (
-        _entity_cut_filter(fecha_corte, entity)
-        + " AND tasa_efectiva_promedio > 0"
-        + " AND tipo_de_tasa != 'N/A'"
-    )
+    where = _entity_cut_filter(fecha_corte, entity) + " AND tasa_efectiva_promedio > 0"
+    if require_rate_type:
+        where += " AND tipo_de_tasa != 'N/A'"
     select = ",".join((*GROUP_COLUMNS, *RATE_MEASURES))
     return _grouped(select, where, GROUP_COLUMNS)
 

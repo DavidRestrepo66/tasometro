@@ -104,3 +104,14 @@ def test_cut_exists_query_probes_a_cut_with_a_bare_filter() -> None:
 def test_entity_key_rejects_non_numeric_codes(tipo_entidad: str, codigo_entidad: str) -> None:
     with pytest.raises(ValueError, match="must be a non-empty string of digits"):
         EntityKey(tipo_entidad=tipo_entidad, codigo_entidad=codigo_entidad)
+
+
+def test_rates_query_can_keep_rows_without_a_rate_type() -> None:
+    where = rates_query(CUT, ENTITY, require_rate_type=False)["$where"]
+
+    assert where == (
+        "fecha_corte = '2026-10-16T00:00:00.000'"
+        " AND tipo_entidad = '1'"
+        " AND codigo_entidad = '7'"
+        " AND tasa_efectiva_promedio > 0"
+    )
